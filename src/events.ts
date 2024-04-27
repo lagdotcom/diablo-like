@@ -1,4 +1,5 @@
 import { Milliseconds, Pixels } from "./flavours";
+import XY from "./types/XY";
 
 export class CanvasResizeEvent extends CustomEvent<{
   width: Pixels;
@@ -9,9 +10,9 @@ export class CanvasResizeEvent extends CustomEvent<{
   }
 }
 
-export class LeftMouseEvent extends CustomEvent<{ x: Pixels; y: Pixels }> {
-  constructor(x: Pixels, y: Pixels) {
-    super("LeftMouse", { detail: { x, y } });
+export class LeftMouseEvent extends CustomEvent<XY<Pixels>> {
+  constructor(detail: XY<Pixels>) {
+    super("LeftMouse", { detail });
   }
 }
 
@@ -20,6 +21,12 @@ export class RenderEvent extends CustomEvent<{
 }> {
   constructor(ctx: CanvasRenderingContext2D) {
     super("Render", { detail: { ctx } });
+  }
+}
+
+export class RightMouseEvent extends CustomEvent<XY<Pixels>> {
+  constructor(detail: XY<Pixels>) {
+    super("RightMouse", { detail });
   }
 }
 

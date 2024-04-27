@@ -1,6 +1,7 @@
 import Camera from "./components/Camera";
 import CanvasResizer from "./components/CanvasResizer";
 import FPSCounter from "./components/FPSCounter";
+import FuseManager from "./components/FuseManager";
 import GameClock, { TickFunction } from "./components/GameClock";
 import MouseHandler from "./components/MouseHandler";
 import Player from "./components/Player";
@@ -12,20 +13,22 @@ export default class Engine extends EventTarget implements Game {
   fpsCounter: FPSCounter;
   camera: Camera;
   clock: GameClock;
+  fuse: FuseManager;
   mouse: MouseHandler;
   player: Player;
   size: CanvasResizer;
-  render: Drawable[];
+  render: Set<Drawable>;
 
   constructor(
     public canvas: HTMLCanvasElement,
     public ctx: CanvasRenderingContext2D,
   ) {
     super();
-    this.render = [];
+    this.render = new Set();
     this.size = new CanvasResizer(canvas);
 
     this.fpsCounter = new FPSCounter(this);
+    this.fuse = new FuseManager(this);
     this.player = new Player(this);
     this.camera = new Camera(this);
     this.mouse = new MouseHandler(this);

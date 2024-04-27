@@ -1,5 +1,6 @@
 import { CanvasResizeEvent } from "../events";
 import { Pixels } from "../flavours";
+import { xy } from "../tools/xy";
 import Dispatcher from "../types/Dispatcher";
 
 export default class CanvasResizer
@@ -11,6 +12,10 @@ export default class CanvasResizer
 
     window.addEventListener("resize", this.resize, { passive: true });
     this.resize();
+  }
+
+  get xy() {
+    return xy(this.width, this.height);
   }
 
   get width(): Pixels {

@@ -1,9 +1,9 @@
 import { Pixels } from "../flavours";
+import XY from "./XY";
 
 export default interface Drawable {
-  x: Pixels;
-  y: Pixels;
+  position: XY<Pixels>;
   radius: Pixels;
 
-  draw(ctx: CanvasRenderingContext2D, ox: Pixels, oy: Pixels): void;
+  draw(ctx: CanvasRenderingContext2D, offset: XY<Pixels>): void;
 }
