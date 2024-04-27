@@ -47,9 +47,24 @@
       super("CanvasResize", { detail: { width, height } });
     }
   };
+  var JoypadButtonEvent = class extends CustomEvent {
+    constructor(detail) {
+      super("JoypadButton", { detail });
+    }
+  };
+  var JoypadMoveEvent = class extends CustomEvent {
+    constructor(detail) {
+      super("JoypadMove", { detail });
+    }
+  };
   var LeftMouseEvent = class extends CustomEvent {
     constructor(detail) {
       super("LeftMouse", { detail });
+    }
+  };
+  var ProcessInputEvent = class extends CustomEvent {
+    constructor() {
+      super("ProcessInput");
     }
   };
   var RenderEvent = class extends CustomEvent {
@@ -187,6 +202,43 @@
     }
   };
 
+  // src/components/JoypadHandler.ts
+  var JoypadHandler = class {
+    constructor(g, axisThreshold = 0.1) {
+      this.g = g;
+      this.axisThreshold = axisThreshold;
+      this.onConnect = (e) => {
+        this.connect(e.gamepad.index);
+      };
+      this.onProcessInput = () => {
+        const pad = navigator.getGamepads()[this.gamepad];
+        if (!pad || !pad.connected) {
+          return this.disconnect();
+        }
+        const [x, y] = pad.axes;
+        const distance = x ** 2 + y ** 2;
+        if (distance > this.axisThreshold) {
+          const angle = Math.atan2(y, x);
+          this.g.dispatchEvent(new JoypadMoveEvent(angle));
+        }
+        for (let i = 0; i < pad.buttons.length; i++) {
+          if (pad.buttons[i].pressed)
+            this.g.dispatchEvent(new JoypadButtonEvent(i));
+        }
+      };
+      this.gamepad = NaN;
+      window.addEventListener("gamepadconnected", this.onConnect);
+    }
+    connect(index) {
+      this.gamepad = index;
+      this.g.addEventListener("ProcessInput", this.onProcessInput);
+    }
+    disconnect() {
+      this.gamepad = NaN;
+      this.g.removeEventListener("ProcessInput", this.onProcessInput);
+    }
+  };
+
   // src/components/MouseHandler.ts
   var MouseHandler = class {
     constructor(g) {
@@ -202,7 +254,7 @@
         this.left = false;
         this.right = false;
       };
-      this.onTick = () => {
+      this.onProcessInput = () => {
         const absolute = addXY(this.position, this.g.camera.offset);
         if (this.left)
           this.g.dispatchEvent(new LeftMouseEvent(absolute));
@@ -217,7 +269,7 @@
       g.canvas.addEventListener("mousemove", this.onUpdate);
       g.canvas.addEventListener("mouseout", this.onReset, { passive: true });
       g.canvas.addEventListener("contextmenu", (e) => e.preventDefault());
-      g.addEventListener("Tick", this.onTick, { passive: true });
+      g.addEventListener("ProcessInput", this.onProcessInput, { passive: true });
     }
   };
 
@@ -277,38 +329,47 @@
       this.attackTime = attackTime;
       this.projectileVelocity = projectileVelocity;
       this.onLeft = ({ detail }) => {
-        if (this.canMove && euclideanDistance(this.position, detail) > this.radius)
-          this.destination = detail;
+        if (euclideanDistance(this.position, detail) > this.radius)
+          this.move = { type: "mouse", target: detail };
       };
       this.onRight = ({ detail }) => {
-        this.destination = void 0;
-        this.target = detail;
+        this.attack = { type: "mouse", target: detail };
+      };
+      this.onJoypadMove = ({ detail }) => {
+        this.move = { type: "pad", angle: detail };
+        this.heading = detail;
+      };
+      this.onJoypadButton = ({ detail }) => {
+        if (detail === 0)
+          this.attack = { type: "pad", angle: this.heading };
       };
       this.onTick = ({ detail: { step } }) => {
-        const { position, moveSpeed, attacking, target, destination } = this;
+        const { position, moveSpeed, attacking, attack, move } = this;
         if (attacking == null ? void 0 : attacking.active)
           return;
-        if (target) {
+        if (attack) {
           this.attacking = this.g.fuse.add(this.attackTime, this.onAttackFinish);
           this.g.fuse.add(this.attackDelay, this.onAttackLaunch);
           this.canMove = false;
+          return;
         }
-        if (destination) {
-          const distance = euclideanDistance(position, destination);
-          const angle = betweenXY(destination, position);
-          const move = Math.min(distance, moveSpeed * step);
+        if (move) {
+          const maxDistance = move.type === "mouse" ? euclideanDistance(move.target, position) : Infinity;
+          const angle = move.type === "mouse" ? betweenXY(move.target, position) : move.angle;
+          const amount = Math.min(maxDistance, moveSpeed * step);
           this.heading = angle;
-          this.position = addXY(position, vectorXY(angle, move));
-          if (distance <= move)
-            this.destination = void 0;
+          this.position = addXY(position, vectorXY(angle, amount));
+          if (maxDistance <= amount || move.type === "pad")
+            this.move = void 0;
         }
       };
       this.onAttackLaunch = () => {
-        if (this.target) {
+        const { attack, position } = this;
+        if (attack) {
           new PlayerShot(
             this.g,
             this.position,
-            betweenXY(this.target, this.position),
+            attack.type === "mouse" ? betweenXY(attack.target, position) : attack.angle,
             this.projectileVelocity,
             8,
             3e3
@@ -317,12 +378,14 @@
       };
       this.onAttackFinish = () => {
         this.canMove = true;
-        this.target = void 0;
+        this.attack = void 0;
       };
       this.canMove = true;
       g.render.add(this);
       g.addEventListener("LeftMouse", this.onLeft, { passive: true });
       g.addEventListener("RightMouse", this.onRight, { passive: true });
+      g.addEventListener("JoypadButton", this.onJoypadButton, { passive: true });
+      g.addEventListener("JoypadMove", this.onJoypadMove, { passive: true });
       g.addEventListener("Tick", this.onTick, { passive: true });
     }
     draw(ctx, o) {
@@ -342,6 +405,7 @@
       this.canvas = canvas;
       this.ctx = ctx;
       this.tick = (step) => {
+        this.dispatchEvent(new ProcessInputEvent());
         this.dispatchEvent(new TickEvent(step));
         this.ctx.clearRect(0, 0, this.size.width, this.size.height);
         this.dispatchEvent(new RenderEvent(this.ctx));
@@ -353,6 +417,7 @@
       this.player = new Player(this);
       this.camera = new Camera(this);
       this.mouse = new MouseHandler(this);
+      this.joypad = new JoypadHandler(this);
       this.clock = new GameClock(this.tick, 50);
     }
   };

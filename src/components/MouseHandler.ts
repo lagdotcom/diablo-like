@@ -1,4 +1,4 @@
-import { LeftMouseEvent, RightMouseEvent, TickEvent } from "../events";
+import { LeftMouseEvent, ProcessInputEvent, RightMouseEvent } from "../events";
 import { Pixels } from "../flavours";
 import { addXY, xy } from "../tools/xy";
 import { Listener } from "../types/Dispatcher";
@@ -20,7 +20,7 @@ export default class MouseHandler {
     g.canvas.addEventListener("mousemove", this.onUpdate);
     g.canvas.addEventListener("mouseout", this.onReset, { passive: true });
     g.canvas.addEventListener("contextmenu", (e) => e.preventDefault());
-    g.addEventListener("Tick", this.onTick, { passive: true });
+    g.addEventListener("ProcessInput", this.onProcessInput, { passive: true });
   }
 
   onUpdate = (e: MouseEvent) => {
@@ -36,7 +36,7 @@ export default class MouseHandler {
     this.right = false;
   };
 
-  onTick: Listener<TickEvent> = () => {
+  onProcessInput: Listener<ProcessInputEvent> = () => {
     const absolute = addXY(this.position, this.g.camera.offset);
 
     if (this.left) this.g.dispatchEvent(new LeftMouseEvent(absolute));

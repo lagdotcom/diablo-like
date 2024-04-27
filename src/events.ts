@@ -1,4 +1,5 @@
-import { Milliseconds, Pixels } from "./flavours";
+import { ButtonIndex, Milliseconds, Pixels, Radians } from "./flavours";
+import Empty from "./types/Empty";
 import XY from "./types/XY";
 
 export class CanvasResizeEvent extends CustomEvent<{
@@ -10,9 +11,27 @@ export class CanvasResizeEvent extends CustomEvent<{
   }
 }
 
+export class JoypadButtonEvent extends CustomEvent<ButtonIndex> {
+  constructor(detail: ButtonIndex) {
+    super("JoypadButton", { detail });
+  }
+}
+
+export class JoypadMoveEvent extends CustomEvent<Radians> {
+  constructor(detail: Radians) {
+    super("JoypadMove", { detail });
+  }
+}
+
 export class LeftMouseEvent extends CustomEvent<XY<Pixels>> {
   constructor(detail: XY<Pixels>) {
     super("LeftMouse", { detail });
+  }
+}
+
+export class ProcessInputEvent extends CustomEvent<Empty> {
+  constructor() {
+    super("ProcessInput");
   }
 }
 

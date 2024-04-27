@@ -1,4 +1,10 @@
-import { LeftMouseEvent, RightMouseEvent, TickEvent } from "../events";
+import {
+  JoypadButtonEvent,
+  JoypadMoveEvent,
+  LeftMouseEvent,
+  RightMouseEvent,
+  TickEvent,
+} from "../events";
 import {
   Milliseconds,
   Pixels,
@@ -15,11 +21,20 @@ import XY from "../types/XY";
 import { Fuse } from "./FuseManager";
 import PlayerShot from "./PlayerShot";
 
+type PlayerAttack =
+  | { type: "mouse"; target: XY<Pixels> }
+  | { type: "pad"; angle: Radians };
+
+type PlayerMove =
+  | { type: "mouse"; target: XY<Pixels> }
+  | { type: "pad"; angle: Radians };
+
 export default class Player implements Drawable {
+  attack?: PlayerAttack;
+  move?: PlayerMove;
+
   attacking?: Fuse;
   canMove: boolean;
-  destination?: XY<Pixels>;
-  target?: XY<Pixels>;
 
   constructor(
     private g: Game,
@@ -37,48 +52,67 @@ export default class Player implements Drawable {
 
     g.addEventListener("LeftMouse", this.onLeft, { passive: true });
     g.addEventListener("RightMouse", this.onRight, { passive: true });
+    g.addEventListener("JoypadButton", this.onJoypadButton, { passive: true });
+    g.addEventListener("JoypadMove", this.onJoypadMove, { passive: true });
     g.addEventListener("Tick", this.onTick, { passive: true });
   }
 
   onLeft: Listener<LeftMouseEvent> = ({ detail }) => {
-    if (this.canMove && euclideanDistance(this.position, detail) > this.radius)
-      this.destination = detail;
+    if (euclideanDistance(this.position, detail) > this.radius)
+      this.move = { type: "mouse", target: detail };
   };
 
   onRight: Listener<RightMouseEvent> = ({ detail }) => {
-    this.destination = undefined;
-    this.target = detail;
+    this.attack = { type: "mouse", target: detail };
+  };
+
+  onJoypadMove: Listener<JoypadMoveEvent> = ({ detail }) => {
+    this.move = { type: "pad", angle: detail };
+    this.heading = detail; // is this bad?
+  };
+
+  onJoypadButton: Listener<JoypadButtonEvent> = ({ detail }) => {
+    if (detail === 0) this.attack = { type: "pad", angle: this.heading };
   };
 
   onTick: Listener<TickEvent> = ({ detail: { step } }) => {
-    const { position, moveSpeed, attacking, target, destination } = this;
+    const { position, moveSpeed, attacking, attack, move } = this;
 
     if (attacking?.active) return;
 
-    if (target) {
+    if (attack) {
       this.attacking = this.g.fuse.add(this.attackTime, this.onAttackFinish);
       this.g.fuse.add(this.attackDelay, this.onAttackLaunch);
       this.canMove = false;
+      return;
     }
 
-    if (destination) {
-      const distance = euclideanDistance(position, destination);
-      const angle = betweenXY(destination, position);
-      const move = Math.min(distance, (moveSpeed * step) as Pixels);
+    if (move) {
+      const maxDistance =
+        move.type === "mouse"
+          ? euclideanDistance(move.target, position)
+          : Infinity;
+      const angle =
+        move.type === "mouse" ? betweenXY(move.target, position) : move.angle;
+      const amount = Math.min(maxDistance, (moveSpeed * step) as Pixels);
 
       this.heading = angle;
-      this.position = addXY(position, vectorXY(angle, move));
+      this.position = addXY(position, vectorXY(angle, amount));
 
-      if (distance <= move) this.destination = undefined;
+      if (maxDistance <= amount || move.type === "pad") this.move = undefined;
     }
   };
 
   onAttackLaunch = () => {
-    if (this.target) {
+    const { attack, position } = this;
+
+    if (attack) {
       new PlayerShot(
         this.g,
         this.position,
-        betweenXY(this.target, this.position),
+        attack.type === "mouse"
+          ? betweenXY(attack.target, position)
+          : attack.angle,
         this.projectileVelocity,
         8,
         3000,
@@ -88,7 +122,7 @@ export default class Player implements Drawable {
 
   onAttackFinish = () => {
     this.canMove = true;
-    this.target = undefined;
+    this.attack = undefined;
   };
 
   draw(ctx: CanvasRenderingContext2D, o: XY<Pixels>) {
