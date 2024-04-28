@@ -11,4 +11,8 @@ export type PixelsPerMillisecond = Flavour<number, "PixelsPerMillisecond">;
 export type Radians = Flavour<number, "Radians">;
 export type RequestID = Flavour<number, "RequestID">;
 
+export type AnimationID = Flavour<string, "AnimationID">;
+export type AnimationTriggerID = Flavour<string, "AnimationTriggerID">;
 export type Colour = Flavour<string, "Colour">;
+export type ResourceURL = Flavour<string, "ResourceURL">;
+export type SpriteID = Flavour<string, "SpriteID">;

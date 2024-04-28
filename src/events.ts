@@ -1,6 +1,22 @@
-import { ButtonIndex, Milliseconds, Pixels, Radians } from "./flavours";
+import AnimationController from "./components/AnimationController";
+import {
+  AnimationTriggerID,
+  ButtonIndex,
+  Milliseconds,
+  Pixels,
+  Radians,
+} from "./flavours";
 import Empty from "./types/Empty";
 import XY from "./types/XY";
+
+export class AnimationTriggerEvent extends CustomEvent<{
+  controller: AnimationController;
+  trigger: AnimationTriggerID;
+}> {
+  constructor(controller: AnimationController, trigger: AnimationTriggerID) {
+    super("AnimationTrigger", { detail: { controller, trigger } });
+  }
+}
 
 export class CanvasResizeEvent extends CustomEvent<{
   width: Pixels;
@@ -26,6 +42,12 @@ export class JoypadMoveEvent extends CustomEvent<Radians> {
 export class LeftMouseEvent extends CustomEvent<XY<Pixels>> {
   constructor(detail: XY<Pixels>) {
     super("LeftMouse", { detail });
+  }
+}
+
+export class LoadingEvent extends CustomEvent<{ now: number; max: number }> {
+  constructor(now: number, max: number) {
+    super("Loading", { detail: { now, max } });
   }
 }
 

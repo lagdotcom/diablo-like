@@ -5,11 +5,14 @@ import GameClock from "../components/GameClock";
 import JoypadHandler from "../components/JoypadHandler";
 import MouseHandler from "../components/MouseHandler";
 import Player from "../components/Player";
+import ResourceManager from "../components/ResourceManager";
 import {
+  AnimationTriggerEvent,
   CanvasResizeEvent,
   JoypadButtonEvent,
   JoypadMoveEvent,
   LeftMouseEvent,
+  LoadingEvent,
   ProcessInputEvent,
   RenderEvent,
   RightMouseEvent,
@@ -22,7 +25,9 @@ import XY from "./XY";
 
 export default interface Game
   extends Dispatcher<{
+    AnimationTrigger: AnimationTriggerEvent;
     LeftMouse: LeftMouseEvent;
+    Loading: LoadingEvent;
     JoypadButton: JoypadButtonEvent;
     JoypadMove: JoypadMoveEvent;
     ProcessInput: ProcessInputEvent;
@@ -39,6 +44,7 @@ export default interface Game
   mouse: MouseHandler;
   player: Player;
   render: Set<Drawable>;
+  res: ResourceManager;
   size: Dispatcher<{ CanvasResize: CanvasResizeEvent }> & {
     width: Pixels;
     height: Pixels;

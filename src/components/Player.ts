@@ -1,24 +1,25 @@
 import {
+  AttackOver,
+  AttackRelease,
+  RogueSpriteSheet,
+} from "../animations/Rogue";
+import {
+  AnimationTriggerEvent,
   JoypadButtonEvent,
   JoypadMoveEvent,
   LeftMouseEvent,
   RightMouseEvent,
   TickEvent,
 } from "../events";
-import {
-  Milliseconds,
-  Pixels,
-  PixelsPerMillisecond,
-  Radians,
-} from "../flavours";
+import { Pixels, PixelsPerMillisecond, Radians } from "../flavours";
 import euclideanDistance from "../tools/euclideanDistance";
-import makeCylinderPath from "../tools/makeCylinderPath";
+import getOctant from "../tools/getOctant";
 import { addXY, betweenXY, vectorXY, xy } from "../tools/xy";
 import { Listener } from "../types/Dispatcher";
 import Drawable from "../types/Drawable";
 import Game from "../types/Game";
 import XY from "../types/XY";
-import { Fuse } from "./FuseManager";
+import AnimationController from "./AnimationController";
 import PlayerShot from "./PlayerShot";
 
 type PlayerAttack =
@@ -29,25 +30,29 @@ type PlayerMove =
   | { type: "mouse"; target: XY<Pixels> }
   | { type: "pad"; angle: Radians };
 
+type AnimationPrefix = "fire" | "move" | "idle";
+
 export default class Player implements Drawable {
+  attacking: boolean;
   attack?: PlayerAttack;
   move?: PlayerMove;
 
-  attacking?: Fuse;
-  canMove: boolean;
+  anim: AnimationController;
+  prefix: AnimationPrefix;
 
   constructor(
     private g: Game,
     public position: XY<Pixels> = xy(0, 0),
-    public radius: Pixels = 30,
-    public height: Pixels = 70,
+    public radius: Pixels = 25,
+    public height: Pixels = 55,
     public heading: Radians = 0,
-    public moveSpeed: PixelsPerMillisecond = 1,
-    public attackDelay: Milliseconds = 200,
-    public attackTime: Milliseconds = 600,
-    public projectileVelocity: PixelsPerMillisecond = 2,
+    public moveSpeed: PixelsPerMillisecond = 0.6,
+    public projectileVelocity: PixelsPerMillisecond = 1.4,
   ) {
-    this.canMove = true;
+    this.anim = new AnimationController(g, RogueSpriteSheet, "idle2");
+    this.prefix = "idle";
+    this.attacking = false;
+
     g.render.add(this);
 
     g.addEventListener("LeftMouse", this.onLeft, { passive: true });
@@ -55,15 +60,30 @@ export default class Player implements Drawable {
     g.addEventListener("JoypadButton", this.onJoypadButton, { passive: true });
     g.addEventListener("JoypadMove", this.onJoypadMove, { passive: true });
     g.addEventListener("Tick", this.onTick, { passive: true });
+
+    g.addEventListener("AnimationTrigger", this.onAnimationTrigger, {
+      passive: true,
+    });
+  }
+
+  private animate(prefix: AnimationPrefix) {
+    const octant = getOctant(this.heading);
+    const id = `${prefix}${octant}`;
+
+    if (prefix === "fire" || this.prefix === "fire") this.anim.play(id);
+    else this.anim.shift(id);
+
+    this.prefix = prefix;
   }
 
   onLeft: Listener<LeftMouseEvent> = ({ detail }) => {
-    if (euclideanDistance(this.position, detail) > this.radius)
+    if (euclideanDistance(detail, this.position) > this.radius)
       this.move = { type: "mouse", target: detail };
+    else this.heading = betweenXY(detail, this.position);
   };
 
   onRight: Listener<RightMouseEvent> = ({ detail }) => {
-    this.attack = { type: "mouse", target: detail };
+    if (!this.attacking) this.attack = { type: "mouse", target: detail };
   };
 
   onJoypadMove: Listener<JoypadMoveEvent> = ({ detail }) => {
@@ -72,18 +92,26 @@ export default class Player implements Drawable {
   };
 
   onJoypadButton: Listener<JoypadButtonEvent> = ({ detail }) => {
-    if (detail === 0) this.attack = { type: "pad", angle: this.heading };
+    if (detail === 0 && !this.attacking)
+      this.attack = { type: "pad", angle: this.heading };
   };
 
-  onTick: Listener<TickEvent> = ({ detail: { step } }) => {
-    const { position, moveSpeed, attacking, attack, move } = this;
+  get canAct() {
+    return !this.attacking;
+  }
 
-    if (attacking?.active) return;
+  onTick: Listener<TickEvent> = ({ detail: { step } }) => {
+    const { position, moveSpeed, attack, move } = this;
+
+    if (!this.canAct) return;
 
     if (attack) {
-      this.attacking = this.g.fuse.add(this.attackTime, this.onAttackFinish);
-      this.g.fuse.add(this.attackDelay, this.onAttackLaunch);
-      this.canMove = false;
+      this.heading =
+        attack.type === "mouse"
+          ? betweenXY(attack.target, position)
+          : attack.angle;
+      this.animate("fire");
+      this.attacking = true;
       return;
     }
 
@@ -103,10 +131,22 @@ export default class Player implements Drawable {
     }
   };
 
+  onAnimationTrigger: Listener<AnimationTriggerEvent> = ({
+    detail: { controller, trigger },
+  }) => {
+    if (controller === this.anim)
+      switch (trigger) {
+        case AttackRelease:
+          return this.onAttackLaunch();
+        case AttackOver:
+          return this.onAttackFinish();
+      }
+  };
+
   onAttackLaunch = () => {
     const { attack, position } = this;
 
-    if (attack) {
+    if (attack)
       new PlayerShot(
         this.g,
         this.position,
@@ -117,22 +157,28 @@ export default class Player implements Drawable {
         8,
         3000,
       );
-    }
   };
 
   onAttackFinish = () => {
-    this.canMove = true;
+    this.attacking = false;
     this.attack = undefined;
+    this.animate("idle");
   };
 
   draw(ctx: CanvasRenderingContext2D, o: XY<Pixels>) {
-    const path = makeCylinderPath(o.x, o.y, this.radius, this.height);
+    if (!this.attacking) this.animate(this.move ? "move" : "idle");
+    this.anim.draw(ctx, o);
 
-    ctx.fillStyle = "blue";
-    ctx.fill(path);
+    // const path = makeCylinderPath(o.x, o.y, this.radius, this.height);
+    // ctx.globalAlpha = 0.1;
 
-    ctx.strokeStyle = "skyblue";
-    ctx.lineWidth = 2;
-    ctx.stroke(path);
+    // ctx.fillStyle = "blue";
+    // ctx.fill(path);
+
+    // ctx.strokeStyle = "skyblue";
+    // ctx.lineWidth = 2;
+    // ctx.stroke(path);
+
+    // ctx.globalAlpha = 1;
   }
 }

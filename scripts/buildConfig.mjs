@@ -1,4 +1,5 @@
 /*eslint-env node*/
+import imageminPlugin from "esbuild-plugin-imagemin";
 
 /**
  * @param {string} mode
@@ -17,7 +18,7 @@ export default function getBuildConfig(mode, options = {}) {
         process.env.npm_package_version
       ),
     },
-    plugins: [],
+    plugins: mode === "build" ? [imageminPlugin()] : [],
     loader: {
       ".json": "file",
       ".ogg": "file",

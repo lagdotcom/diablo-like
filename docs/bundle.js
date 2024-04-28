@@ -42,6 +42,11 @@
   };
 
   // src/events.ts
+  var AnimationTriggerEvent = class extends CustomEvent {
+    constructor(controller, trigger) {
+      super("AnimationTrigger", { detail: { controller, trigger } });
+    }
+  };
   var CanvasResizeEvent = class extends CustomEvent {
     constructor(width, height) {
       super("CanvasResize", { detail: { width, height } });
@@ -60,6 +65,11 @@
   var LeftMouseEvent = class extends CustomEvent {
     constructor(detail) {
       super("LeftMouse", { detail });
+    }
+  };
+  var LoadingEvent = class extends CustomEvent {
+    constructor(now, max) {
+      super("Loading", { detail: { now, max } });
     }
   };
   var ProcessInputEvent = class extends CustomEvent {
@@ -273,10 +283,181 @@
     }
   };
 
+  // src/img/diablo-rogue-lightarmour-bow.png
+  var diablo_rogue_lightarmour_bow_default = "./diablo-rogue-lightarmour-bow-RBMJG63H.png";
+
+  // src/animations/tools.ts
+  var chars = "abcdefghijklmnopqrstuvwxyz";
+  var loop = (data) => ({
+    frames: data.frames,
+    loopTo: 0
+  });
+  function makeAnimation(prefix, count, duration, sx, sy, w, h, processor = (data) => data) {
+    const sprites = [];
+    const frames = [];
+    let x = sx;
+    for (let i = 0; i < count; i++) {
+      sprites.push([
+        `${prefix}${chars[i]}`,
+        { position: xy(x, sy), size: xy(w, h) }
+      ]);
+      x += w;
+      frames.push({ id: `${prefix}${chars[i]}`, duration });
+    }
+    return { sprites, animation: [prefix, processor({ frames })] };
+  }
+  function makeSpriteSheet(url, globalOffset, dataArray) {
+    return {
+      url,
+      globalOffset,
+      sprites: Object.fromEntries(dataArray.flatMap((a) => a.sprites)),
+      animations: Object.fromEntries(dataArray.map((a) => a.animation))
+    };
+  }
+
+  // src/animations/Rogue.ts
+  var AttackRelease = "attack.release";
+  var AttackOver = "attack.over";
+  var RogueFire = (data) => ({
+    frames: data.frames.map(
+      (frame, i) => i === 7 ? { id: frame.id, duration: frame.duration, trigger: AttackRelease } : frame
+    ),
+    endTrigger: AttackOver,
+    offset: xy(-64, -108)
+  });
+  var RogueSpriteSheet = makeSpriteSheet(diablo_rogue_lightarmour_bow_default, xy(-48, -76), [
+    makeAnimation("idle2", 8, 100, 0, 1046, 96, 94, loop),
+    makeAnimation("idle1", 8, 100, 0, 1143, 96, 94, loop),
+    makeAnimation("idle4", 8, 100, 0, 1240, 96, 94, loop),
+    makeAnimation("idle7", 8, 100, 0, 1337, 96, 94, loop),
+    makeAnimation("idle8", 8, 100, 0, 1434, 96, 94, loop),
+    makeAnimation("idle9", 8, 100, 0, 1531, 96, 94, loop),
+    makeAnimation("idle6", 8, 100, 0, 1628, 96, 94, loop),
+    makeAnimation("idle3", 8, 100, 0, 1725, 96, 94, loop),
+    makeAnimation("move2", 8, 50, 2690, 1046, 96, 94, loop),
+    makeAnimation("move1", 8, 50, 2690, 1143, 96, 94, loop),
+    makeAnimation("move4", 8, 50, 2690, 1240, 96, 94, loop),
+    makeAnimation("move7", 8, 50, 2690, 1337, 96, 94, loop),
+    makeAnimation("move8", 8, 50, 2690, 1434, 96, 94, loop),
+    makeAnimation("move9", 8, 50, 2690, 1531, 96, 94, loop),
+    makeAnimation("move6", 8, 50, 2690, 1628, 96, 94, loop),
+    makeAnimation("move3", 8, 50, 2690, 1725, 96, 94, loop),
+    makeAnimation("fire2", 12, 50, 0, 8, 128, 126, RogueFire),
+    makeAnimation("fire1", 12, 50, 0, 137, 128, 126, RogueFire),
+    makeAnimation("fire4", 12, 50, 0, 266, 128, 126, RogueFire),
+    makeAnimation("fire7", 12, 50, 0, 395, 128, 126, RogueFire),
+    makeAnimation("fire8", 12, 50, 0, 524, 128, 126, RogueFire),
+    makeAnimation("fire9", 12, 50, 0, 653, 128, 126, RogueFire),
+    makeAnimation("fire6", 12, 50, 0, 782, 128, 126, RogueFire),
+    makeAnimation("fire3", 12, 50, 0, 911, 128, 126, RogueFire)
+  ]);
+
   // src/tools/euclideanDistance.ts
   function euclideanDistance(a, b) {
     return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
   }
+
+  // src/tools/getOctant.ts
+  var octantAngles = [
+    -7 * Math.PI / 8,
+    -5 * Math.PI / 8,
+    -3 * Math.PI / 8,
+    -1 * Math.PI / 8,
+    1 * Math.PI / 8,
+    3 * Math.PI / 8,
+    5 * Math.PI / 8,
+    7 * Math.PI / 8
+  ];
+  var octantIndices = [7, 8, 9, 6, 3, 2, 1];
+  function getOctant(angle) {
+    for (let i = 0; i < octantAngles.length; i++) {
+      const left = octantAngles[i];
+      const right = octantAngles[i + 1];
+      if (angle >= left && angle < right)
+        return octantIndices[i];
+    }
+    return 4;
+  }
+
+  // src/components/AnimationController.ts
+  var AnimationController = class {
+    constructor(g, sheet, animation) {
+      this.g = g;
+      this.sheet = sheet;
+      this.onTick = ({ detail: { step } }) => {
+        this.spriteDuration -= step;
+        if (this.spriteDuration <= 0)
+          this.nextFrame();
+      };
+      this.currentFrameIndex = 0;
+      this.spriteDuration = 0;
+      this.play(animation);
+      g.res.loadImage(sheet.url).then((img) => this.img = img);
+      g.addEventListener("Tick", this.onTick, { passive: true });
+    }
+    get offset() {
+      var _a;
+      const a = this.sheet.animations[this.currentAnimation];
+      return (_a = a.offset) != null ? _a : this.sheet.globalOffset;
+    }
+    trigger(trigger) {
+      this.g.dispatchEvent(new AnimationTriggerEvent(this, trigger));
+    }
+    loadFrame() {
+      const f = this.sheet.animations[this.currentAnimation].frames[this.currentFrameIndex];
+      this.spriteDuration = f.duration;
+      if (f.trigger)
+        this.trigger(f.trigger);
+    }
+    nextFrame() {
+      this.currentFrameIndex++;
+      const a = this.sheet.animations[this.currentAnimation];
+      if (this.currentFrameIndex >= a.frames.length) {
+        if (typeof a.loopTo !== "undefined") {
+          this.currentFrameIndex = a.loopTo;
+        } else if (a.endTrigger)
+          return this.trigger(a.endTrigger);
+      }
+      this.loadFrame();
+    }
+    checkAnim(animation) {
+      if (!this.sheet.animations[animation]) {
+        console.warn(`tried to play animation: ${animation}`);
+        return true;
+      }
+    }
+    play(animation) {
+      if (this.checkAnim(animation))
+        return;
+      this.currentAnimation = animation;
+      this.currentFrameIndex = 0;
+      this.loadFrame();
+    }
+    shift(animation) {
+      if (this.checkAnim(animation))
+        return;
+      this.currentAnimation = animation;
+    }
+    draw(ctx, o) {
+      const f = this.sheet.animations[this.currentAnimation].frames[this.currentFrameIndex];
+      const s = this.sheet.sprites[f.id];
+      const { x: sx, y: sy } = s.position;
+      const { x: w, y: h } = s.size;
+      const { x: dx, y: dy } = o;
+      const { x: ox, y: oy } = this.offset;
+      ctx.drawImage(
+        this.img,
+        sx,
+        sy,
+        w,
+        h,
+        Math.round(dx + ox),
+        Math.round(dy + oy),
+        w,
+        h
+      );
+    }
+  };
 
   // src/tools/makeCylinderPath.ts
   function makeCylinderPath(x, y, radius, height) {
@@ -308,7 +489,7 @@
       g.addEventListener("Tick", this.onTick, { passive: true });
     }
     draw(ctx, o) {
-      const path = makeCylinderPath(o.x, o.y, this.radius, this.radius);
+      const path = makeCylinderPath(o.x, o.y - 20, this.radius, this.radius);
       ctx.fillStyle = "red";
       ctx.fill(path);
       ctx.strokeStyle = "orange";
@@ -318,39 +499,40 @@
 
   // src/components/Player.ts
   var Player = class {
-    constructor(g, position = xy(0, 0), radius = 30, height = 70, heading = 0, moveSpeed = 1, attackDelay = 200, attackTime = 600, projectileVelocity = 2) {
+    constructor(g, position = xy(0, 0), radius = 25, height = 55, heading = 0, moveSpeed = 0.6, projectileVelocity = 1.4) {
       this.g = g;
       this.position = position;
       this.radius = radius;
       this.height = height;
       this.heading = heading;
       this.moveSpeed = moveSpeed;
-      this.attackDelay = attackDelay;
-      this.attackTime = attackTime;
       this.projectileVelocity = projectileVelocity;
       this.onLeft = ({ detail }) => {
-        if (euclideanDistance(this.position, detail) > this.radius)
+        if (euclideanDistance(detail, this.position) > this.radius)
           this.move = { type: "mouse", target: detail };
+        else
+          this.heading = betweenXY(detail, this.position);
       };
       this.onRight = ({ detail }) => {
-        this.attack = { type: "mouse", target: detail };
+        if (!this.attacking)
+          this.attack = { type: "mouse", target: detail };
       };
       this.onJoypadMove = ({ detail }) => {
         this.move = { type: "pad", angle: detail };
         this.heading = detail;
       };
       this.onJoypadButton = ({ detail }) => {
-        if (detail === 0)
+        if (detail === 0 && !this.attacking)
           this.attack = { type: "pad", angle: this.heading };
       };
       this.onTick = ({ detail: { step } }) => {
-        const { position, moveSpeed, attacking, attack, move } = this;
-        if (attacking == null ? void 0 : attacking.active)
+        const { position, moveSpeed, attack, move } = this;
+        if (!this.canAct)
           return;
         if (attack) {
-          this.attacking = this.g.fuse.add(this.attackTime, this.onAttackFinish);
-          this.g.fuse.add(this.attackDelay, this.onAttackLaunch);
-          this.canMove = false;
+          this.heading = attack.type === "mouse" ? betweenXY(attack.target, position) : attack.angle;
+          this.animate("fire");
+          this.attacking = true;
           return;
         }
         if (move) {
@@ -363,9 +545,20 @@
             this.move = void 0;
         }
       };
+      this.onAnimationTrigger = ({
+        detail: { controller, trigger }
+      }) => {
+        if (controller === this.anim)
+          switch (trigger) {
+            case AttackRelease:
+              return this.onAttackLaunch();
+            case AttackOver:
+              return this.onAttackFinish();
+          }
+      };
       this.onAttackLaunch = () => {
         const { attack, position } = this;
-        if (attack) {
+        if (attack)
           new PlayerShot(
             this.g,
             this.position,
@@ -374,27 +567,85 @@
             8,
             3e3
           );
-        }
       };
       this.onAttackFinish = () => {
-        this.canMove = true;
+        this.attacking = false;
         this.attack = void 0;
+        this.animate("idle");
       };
-      this.canMove = true;
+      this.anim = new AnimationController(g, RogueSpriteSheet, "idle2");
+      this.prefix = "idle";
+      this.attacking = false;
       g.render.add(this);
       g.addEventListener("LeftMouse", this.onLeft, { passive: true });
       g.addEventListener("RightMouse", this.onRight, { passive: true });
       g.addEventListener("JoypadButton", this.onJoypadButton, { passive: true });
       g.addEventListener("JoypadMove", this.onJoypadMove, { passive: true });
       g.addEventListener("Tick", this.onTick, { passive: true });
+      g.addEventListener("AnimationTrigger", this.onAnimationTrigger, {
+        passive: true
+      });
+    }
+    animate(prefix) {
+      const octant = getOctant(this.heading);
+      const id = `${prefix}${octant}`;
+      if (prefix === "fire" || this.prefix === "fire")
+        this.anim.play(id);
+      else
+        this.anim.shift(id);
+      this.prefix = prefix;
+    }
+    get canAct() {
+      return !this.attacking;
     }
     draw(ctx, o) {
-      const path = makeCylinderPath(o.x, o.y, this.radius, this.height);
-      ctx.fillStyle = "blue";
-      ctx.fill(path);
-      ctx.strokeStyle = "skyblue";
-      ctx.lineWidth = 2;
-      ctx.stroke(path);
+      if (!this.attacking)
+        this.animate(this.move ? "move" : "idle");
+      this.anim.draw(ctx, o);
+    }
+  };
+
+  // src/components/ResourceManager.ts
+  var ResourceManager = class {
+    constructor(g) {
+      this.g = g;
+      this.promises = /* @__PURE__ */ new Map();
+      this.loaders = [];
+      this.loaded = 0;
+      this.loading = 0;
+    }
+    get loadingText() {
+      if (this.loaded < this.loading)
+        return `Loading: ${this.loaded} / ${this.loading}`;
+    }
+    report() {
+      this.g.dispatchEvent(new LoadingEvent(this.loaded, this.loading));
+    }
+    start(src, promise) {
+      this.loading++;
+      this.report();
+      this.promises.set(src, promise);
+      this.loaders.push(
+        promise.then((arg) => {
+          this.loaded++;
+          this.report();
+          return arg;
+        })
+      );
+      return promise;
+    }
+    loadImage(src) {
+      const res = this.promises.get(src);
+      if (res)
+        return res;
+      return this.start(
+        src,
+        new Promise((resolve) => {
+          const img = new Image();
+          img.src = src;
+          img.addEventListener("load", () => resolve(img));
+        })
+      );
     }
   };
 
@@ -405,12 +656,22 @@
       this.canvas = canvas;
       this.ctx = ctx;
       this.tick = (step) => {
+        this.ctx.clearRect(0, 0, this.size.width, this.size.height);
+        const loadingText = this.res.loadingText;
+        if (loadingText) {
+          this.ctx.font = "64px sans-serif";
+          this.ctx.fillStyle = "white";
+          this.ctx.textAlign = "center";
+          this.ctx.textBaseline = "middle";
+          this.ctx.fillText(loadingText, this.size.width / 2, this.size.height / 2);
+          return;
+        }
         this.dispatchEvent(new ProcessInputEvent());
         this.dispatchEvent(new TickEvent(step));
-        this.ctx.clearRect(0, 0, this.size.width, this.size.height);
         this.dispatchEvent(new RenderEvent(this.ctx));
       };
       this.render = /* @__PURE__ */ new Set();
+      this.res = new ResourceManager(this);
       this.size = new CanvasResizer(canvas);
       this.fpsCounter = new FPSCounter(this);
       this.fuse = new FuseManager(this);

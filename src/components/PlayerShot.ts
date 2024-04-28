@@ -41,7 +41,7 @@ export default class PlayerShot implements Drawable {
   };
 
   draw(ctx: CanvasRenderingContext2D, o: XY<Pixels>): void {
-    const path = makeCylinderPath(o.x, o.y, this.radius, this.radius);
+    const path = makeCylinderPath(o.x, o.y - 20, this.radius, this.radius);
 
     ctx.fillStyle = "red";
     ctx.fill(path);
