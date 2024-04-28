@@ -257,8 +257,6 @@
         this.left = !!(e.buttons & 1);
         this.right = !!(e.buttons & 2);
         this.position = xy(e.x, e.y);
-        if (this.right)
-          e.preventDefault();
       };
       this.onReset = () => {
         this.left = false;
@@ -274,10 +272,10 @@
       this.left = false;
       this.right = false;
       this.position = xy(NaN, NaN);
-      g.canvas.addEventListener("mousedown", this.onUpdate);
-      g.canvas.addEventListener("mouseup", this.onUpdate);
-      g.canvas.addEventListener("mousemove", this.onUpdate);
-      g.canvas.addEventListener("mouseout", this.onReset, { passive: true });
+      g.canvas.addEventListener("pointerdown", this.onUpdate, { passive: true });
+      g.canvas.addEventListener("pointerup", this.onUpdate, { passive: true });
+      g.canvas.addEventListener("pointermove", this.onUpdate, { passive: true });
+      g.canvas.addEventListener("pointerout", this.onReset, { passive: true });
       g.canvas.addEventListener("contextmenu", (e) => e.preventDefault());
       g.addEventListener("ProcessInput", this.onProcessInput, { passive: true });
     }
