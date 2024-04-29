@@ -4,8 +4,9 @@ import FuseManager from "../components/FuseManager";
 import GameClock from "../components/GameClock";
 import JoypadHandler from "../components/JoypadHandler";
 import MouseHandler from "../components/MouseHandler";
-import Player from "../components/Player";
 import ResourceManager from "../components/ResourceManager";
+import EntityBase from "../entities/EntityBase";
+import Player from "../entities/Player";
 import {
   AnimationTriggerEvent,
   CanvasResizeEvent,
@@ -21,6 +22,7 @@ import {
 import { Pixels } from "../flavours";
 import Dispatcher from "./Dispatcher";
 import Drawable from "./Drawable";
+import RenderFlags from "./RenderFlags";
 import XY from "./XY";
 
 export default interface Game
@@ -38,12 +40,14 @@ export default interface Game
   camera: Camera;
   canvas: HTMLCanvasElement;
   clock: GameClock;
+  enemies: Set<EntityBase<unknown>>;
   fpsCounter: FPSCounter;
   fuse: FuseManager;
   joypad: JoypadHandler;
   mouse: MouseHandler;
   player: Player;
   render: Set<Drawable>;
+  renderFlags: RenderFlags;
   res: ResourceManager;
   size: Dispatcher<{ CanvasResize: CanvasResizeEvent }> & {
     width: Pixels;

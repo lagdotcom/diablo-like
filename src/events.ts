@@ -7,6 +7,7 @@ import {
   Radians,
 } from "./flavours";
 import Empty from "./types/Empty";
+import RenderFlags from "./types/RenderFlags";
 import XY from "./types/XY";
 
 export class AnimationTriggerEvent extends CustomEvent<{
@@ -59,9 +60,10 @@ export class ProcessInputEvent extends CustomEvent<Empty> {
 
 export class RenderEvent extends CustomEvent<{
   ctx: CanvasRenderingContext2D;
+  flags: RenderFlags;
 }> {
-  constructor(ctx: CanvasRenderingContext2D) {
-    super("Render", { detail: { ctx } });
+  constructor(ctx: CanvasRenderingContext2D, flags: RenderFlags) {
+    super("Render", { detail: { ctx, flags } });
   }
 }
 

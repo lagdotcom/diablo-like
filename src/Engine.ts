@@ -1,20 +1,27 @@
 import Camera from "./components/Camera";
 import CanvasResizer from "./components/CanvasResizer";
+import DebugKeyHandler from "./components/DebugKeyHandler";
 import FPSCounter from "./components/FPSCounter";
 import FuseManager from "./components/FuseManager";
 import GameClock, { TickFunction } from "./components/GameClock";
 import JoypadHandler from "./components/JoypadHandler";
 import MouseHandler from "./components/MouseHandler";
-import Player from "./components/Player";
 import ResourceManager from "./components/ResourceManager";
+import EntityBase from "./entities/EntityBase";
+import Fallen from "./entities/Fallen";
+import Player from "./entities/Player";
 import { ProcessInputEvent, RenderEvent, TickEvent } from "./events";
+import setFont from "./tools/setFont";
+import { xy } from "./tools/xy";
 import Drawable from "./types/Drawable";
 import Game from "./types/Game";
+import RenderFlags from "./types/RenderFlags";
 
 export default class Engine extends EventTarget implements Game {
   fpsCounter: FPSCounter;
   camera: Camera;
   clock: GameClock;
+  enemies: Set<EntityBase<unknown>>;
   fuse: FuseManager;
   joypad: JoypadHandler;
   mouse: MouseHandler;
@@ -22,6 +29,7 @@ export default class Engine extends EventTarget implements Game {
   res: ResourceManager;
   size: CanvasResizer;
   render: Set<Drawable>;
+  renderFlags: RenderFlags;
 
   constructor(
     public canvas: HTMLCanvasElement,
@@ -29,15 +37,23 @@ export default class Engine extends EventTarget implements Game {
   ) {
     super();
     this.render = new Set();
+    this.renderFlags = { hitBox: false, attackBox: false };
     this.res = new ResourceManager(this);
     this.size = new CanvasResizer(canvas);
 
     this.fpsCounter = new FPSCounter(this);
     this.fuse = new FuseManager(this);
-    this.player = new Player(this);
+    this.player = new Player(this, xy(0, 0));
     this.camera = new Camera(this);
     this.mouse = new MouseHandler(this);
     this.joypad = new JoypadHandler(this);
+
+    this.enemies = new Set([
+      new Fallen(this, xy(200, 0)),
+      new Fallen(this, xy(-10, 120)),
+    ]);
+
+    new DebugKeyHandler(this);
 
     this.clock = new GameClock(this.tick, 50);
   }
@@ -47,10 +63,7 @@ export default class Engine extends EventTarget implements Game {
 
     const loadingText = this.res.loadingText;
     if (loadingText) {
-      this.ctx.font = "64px sans-serif";
-      this.ctx.fillStyle = "white";
-      this.ctx.textAlign = "center";
-      this.ctx.textBaseline = "middle";
+      setFont(this.ctx, "64px sans-serif", "white", "center", "middle");
       this.ctx.fillText(loadingText, this.size.width / 2, this.size.height / 2);
       return;
     }
@@ -59,6 +72,6 @@ export default class Engine extends EventTarget implements Game {
 
     this.dispatchEvent(new TickEvent(step));
 
-    this.dispatchEvent(new RenderEvent(this.ctx));
+    this.dispatchEvent(new RenderEvent(this.ctx, this.renderFlags));
   };
 }

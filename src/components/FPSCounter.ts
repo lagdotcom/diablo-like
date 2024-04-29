@@ -1,5 +1,6 @@
 import { CanvasResizeEvent, RenderEvent, TickEvent } from "../events";
 import { Milliseconds, Pixels } from "../flavours";
+import setFont from "../tools/setFont";
 import { Listener } from "../types/Dispatcher";
 import Game from "../types/Game";
 
@@ -37,12 +38,8 @@ export default class FPSCounter {
   };
 
   onRender: Listener<RenderEvent> = ({ detail: { ctx } }) => {
-    ctx.fillStyle = "yellow";
-    ctx.textAlign = "end";
-    ctx.textBaseline = "bottom";
-    ctx.font = "24px sans-serif";
-
     const { fps, x, y } = this;
+    setFont(ctx, "24px sans-serif", "yellow", "end", "bottom");
     ctx.fillText(Math.round(fps).toString(), x, y);
   };
 }

@@ -2,6 +2,7 @@ import { CanvasResizeEvent, RenderEvent } from "../events";
 import { Pixels } from "../flavours";
 import { subXY, xy } from "../tools/xy";
 import { Listener } from "../types/Dispatcher";
+import Drawable from "../types/Drawable";
 import Game from "../types/Game";
 import XY from "../types/XY";
 
@@ -25,17 +26,25 @@ export default class Camera {
     return subXY(this.position, this.halfSize);
   }
 
+  get renderList() {
+    const list: Drawable[] = [];
+
+    for (const r of this.g.render) {
+      // TODO clip to camera
+      list.push(r);
+    }
+
+    return list.sort((a, b) => a.position.y - b.position.y);
+  }
+
   onResize: Listener<CanvasResizeEvent> = ({ detail: { width, height } }) => {
     this.size = xy(width, height);
   };
 
-  onRender: Listener<RenderEvent> = ({ detail: { ctx } }) => {
-    // TODO improve this
-    for (const r of this.g.render) {
+  onRender: Listener<RenderEvent> = ({ detail: { ctx, flags } }) => {
+    for (const r of this.renderList) {
       const offset = subXY(r.position, this.offset);
-
-      // TODO clip to camera
-      r.draw(ctx, offset);
+      r.draw(ctx, offset, flags);
     }
   };
 }

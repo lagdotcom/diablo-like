@@ -22,10 +22,17 @@ export interface AnimationData {
   animation: [AnimationID, SpriteAnimation];
 }
 
-export const loop: Processor<SpriteAnimation> = (data) => ({
-  frames: data.frames,
-  loopTo: 0,
-});
+export const loop: Processor<SpriteAnimation> = (data) => {
+  data.loopTo = 0;
+  return data;
+};
+
+export const specify =
+  (chars: string): Processor<SpriteAnimation> =>
+  (data) => {
+    data.frames = Array.from(chars).map((ch) => data.frames[chars.indexOf(ch)]);
+    return data;
+  };
 
 export function makeAnimation(
   prefix: AnimationID,

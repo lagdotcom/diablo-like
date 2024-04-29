@@ -77,6 +77,8 @@ export default class AnimationController {
     if (this.checkAnim(animation)) return;
 
     this.currentAnimation = animation;
+    const a = this.sheet.animations[animation];
+    if (this.currentFrameIndex >= a.frames.length) this.currentFrameIndex = 0;
   }
 
   onTick: Listener<TickEvent> = ({ detail: { step } }) => {

@@ -22,10 +22,10 @@
       this.onResize = ({ detail: { width, height } }) => {
         this.size = xy(width, height);
       };
-      this.onRender = ({ detail: { ctx } }) => {
-        for (const r of this.g.render) {
+      this.onRender = ({ detail: { ctx, flags } }) => {
+        for (const r of this.renderList) {
           const offset = subXY(r.position, this.offset);
-          r.draw(ctx, offset);
+          r.draw(ctx, offset, flags);
         }
       };
       this.size = g.size.xy;
@@ -38,6 +38,13 @@
     }
     get offset() {
       return subXY(this.position, this.halfSize);
+    }
+    get renderList() {
+      const list = [];
+      for (const r of this.g.render) {
+        list.push(r);
+      }
+      return list.sort((a, b) => a.position.y - b.position.y);
     }
   };
 
@@ -78,8 +85,8 @@
     }
   };
   var RenderEvent = class extends CustomEvent {
-    constructor(ctx) {
-      super("Render", { detail: { ctx } });
+    constructor(ctx, flags) {
+      super("Render", { detail: { ctx, flags } });
     }
   };
   var RightMouseEvent = class extends CustomEvent {
@@ -123,6 +130,31 @@
     }
   };
 
+  // src/tools/setFont.ts
+  function setFont(ctx, font, colour, alignX, alignY) {
+    ctx.font = font;
+    ctx.fillStyle = colour;
+    ctx.textAlign = alignX;
+    ctx.textBaseline = alignY;
+  }
+
+  // src/components/DebugKeyHandler.ts
+  var DebugKeyHandler = class {
+    constructor(g) {
+      this.g = g;
+      window.addEventListener("keypress", (e) => {
+        if (e.key === "h")
+          g.renderFlags.hitBox = !g.renderFlags.hitBox;
+        if (e.key === "a")
+          g.renderFlags.attackBox = !g.renderFlags.attackBox;
+      });
+      g.addEventListener("Render", ({ detail: { ctx } }) => {
+        setFont(ctx, "24px sans-serif", "white", "left", "bottom");
+        ctx.fillText("[H]it box / [A]ttack box", 8, g.size.height - 8);
+      });
+    }
+  };
+
   // src/components/FPSCounter.ts
   var FPSCounter = class {
     constructor(g, samples = 10) {
@@ -137,11 +169,8 @@
           this.steps.shift();
       };
       this.onRender = ({ detail: { ctx } }) => {
-        ctx.fillStyle = "yellow";
-        ctx.textAlign = "end";
-        ctx.textBaseline = "bottom";
-        ctx.font = "24px sans-serif";
         const { fps, x, y } = this;
+        setFont(ctx, "24px sans-serif", "yellow", "end", "bottom");
         ctx.fillText(Math.round(fps).toString(), x, y);
       };
       this.steps = [];
@@ -281,15 +310,59 @@
     }
   };
 
-  // src/img/diablo-rogue-lightarmour-bow.png
-  var diablo_rogue_lightarmour_bow_default = "./diablo-rogue-lightarmour-bow-RBMJG63H.png";
+  // src/components/ResourceManager.ts
+  var ResourceManager = class {
+    constructor(g) {
+      this.g = g;
+      this.promises = /* @__PURE__ */ new Map();
+      this.loaders = [];
+      this.loaded = 0;
+      this.loading = 0;
+    }
+    get loadingText() {
+      if (this.loaded < this.loading)
+        return `Loading: ${this.loaded} / ${this.loading}`;
+    }
+    report() {
+      this.g.dispatchEvent(new LoadingEvent(this.loaded, this.loading));
+    }
+    start(src, promise) {
+      this.loading++;
+      this.report();
+      this.promises.set(src, promise);
+      this.loaders.push(
+        promise.then((arg) => {
+          this.loaded++;
+          this.report();
+          return arg;
+        })
+      );
+      return promise;
+    }
+    loadImage(src) {
+      const res = this.promises.get(src);
+      if (res)
+        return res;
+      return this.start(
+        src,
+        new Promise((resolve) => {
+          const img = new Image();
+          img.src = src;
+          img.addEventListener("load", () => resolve(img));
+        })
+      );
+    }
+  };
+
+  // src/img/diablo-fallen-sword.png
+  var diablo_fallen_sword_default = "./diablo-fallen-sword-PLZGE4HB.png";
 
   // src/animations/tools.ts
   var chars = "abcdefghijklmnopqrstuvwxyz";
-  var loop = (data) => ({
-    frames: data.frames,
-    loopTo: 0
-  });
+  var loop = (data) => {
+    data.loopTo = 0;
+    return data;
+  };
   function makeAnimation(prefix, count, duration, sx, sy, w, h, processor = (data) => data) {
     const sprites = [];
     const frames = [];
@@ -313,68 +386,33 @@
     };
   }
 
-  // src/animations/Rogue.ts
-  var AttackRelease = "attack.release";
-  var AttackOver = "attack.over";
-  var RogueFire = (data) => ({
-    frames: data.frames.map(
-      (frame, i) => i === 7 ? { id: frame.id, duration: frame.duration, trigger: AttackRelease } : frame
-    ),
-    endTrigger: AttackOver,
-    offset: xy(-64, -108)
-  });
-  var RogueSpriteSheet = makeSpriteSheet(diablo_rogue_lightarmour_bow_default, xy(-48, -76), [
-    makeAnimation("idle2", 8, 100, 0, 1046, 96, 94, loop),
-    makeAnimation("idle1", 8, 100, 0, 1143, 96, 94, loop),
-    makeAnimation("idle4", 8, 100, 0, 1240, 96, 94, loop),
-    makeAnimation("idle7", 8, 100, 0, 1337, 96, 94, loop),
-    makeAnimation("idle8", 8, 100, 0, 1434, 96, 94, loop),
-    makeAnimation("idle9", 8, 100, 0, 1531, 96, 94, loop),
-    makeAnimation("idle6", 8, 100, 0, 1628, 96, 94, loop),
-    makeAnimation("idle3", 8, 100, 0, 1725, 96, 94, loop),
-    makeAnimation("move2", 8, 50, 2690, 1046, 96, 94, loop),
-    makeAnimation("move1", 8, 50, 2690, 1143, 96, 94, loop),
-    makeAnimation("move4", 8, 50, 2690, 1240, 96, 94, loop),
-    makeAnimation("move7", 8, 50, 2690, 1337, 96, 94, loop),
-    makeAnimation("move8", 8, 50, 2690, 1434, 96, 94, loop),
-    makeAnimation("move9", 8, 50, 2690, 1531, 96, 94, loop),
-    makeAnimation("move6", 8, 50, 2690, 1628, 96, 94, loop),
-    makeAnimation("move3", 8, 50, 2690, 1725, 96, 94, loop),
-    makeAnimation("fire2", 12, 50, 0, 8, 128, 126, RogueFire),
-    makeAnimation("fire1", 12, 50, 0, 137, 128, 126, RogueFire),
-    makeAnimation("fire4", 12, 50, 0, 266, 128, 126, RogueFire),
-    makeAnimation("fire7", 12, 50, 0, 395, 128, 126, RogueFire),
-    makeAnimation("fire8", 12, 50, 0, 524, 128, 126, RogueFire),
-    makeAnimation("fire9", 12, 50, 0, 653, 128, 126, RogueFire),
-    makeAnimation("fire6", 12, 50, 0, 782, 128, 126, RogueFire),
-    makeAnimation("fire3", 12, 50, 0, 911, 128, 126, RogueFire)
-  ]);
+  // src/animations/Fallen.ts
+  var FallenSpriteSheet = makeSpriteSheet(
+    diablo_fallen_sword_default,
+    xy(-68, -76),
+    [
+      makeAnimation("idle2", 12, 100, 3458, 8, 128, 94, loop),
+      makeAnimation("idle1", 12, 100, 3458, 104, 128, 94, loop),
+      makeAnimation("idle4", 12, 100, 3458, 200, 128, 94, loop),
+      makeAnimation("idle7", 12, 100, 3458, 296, 128, 94, loop),
+      makeAnimation("idle8", 12, 100, 3458, 392, 128, 94, loop),
+      makeAnimation("idle9", 12, 100, 3458, 488, 128, 94, loop),
+      makeAnimation("idle6", 12, 100, 3458, 584, 128, 94, loop),
+      makeAnimation("idle3", 12, 100, 3458, 680, 128, 94, loop),
+      makeAnimation("move2", 12, 100, 3330, 783, 128, 94, loop),
+      makeAnimation("move1", 12, 100, 3330, 879, 128, 94, loop),
+      makeAnimation("move4", 12, 100, 3330, 975, 128, 94, loop),
+      makeAnimation("move7", 12, 100, 3330, 1071, 128, 94, loop),
+      makeAnimation("move8", 12, 100, 3330, 1167, 128, 94, loop),
+      makeAnimation("move9", 12, 100, 3330, 1263, 128, 94, loop),
+      makeAnimation("move6", 12, 100, 3330, 1359, 128, 94, loop),
+      makeAnimation("move3", 12, 100, 3330, 1455, 128, 94, loop)
+    ]
+  );
 
   // src/tools/euclideanDistance.ts
   function euclideanDistance(a, b) {
     return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
-  }
-
-  // src/tools/getOctant.ts
-  var octantAngles = [
-    -7 * Math.PI / 8,
-    -5 * Math.PI / 8,
-    -3 * Math.PI / 8,
-    -1 * Math.PI / 8,
-    1 * Math.PI / 8,
-    3 * Math.PI / 8,
-    5 * Math.PI / 8,
-    7 * Math.PI / 8
-  ];
-  var octantIndices = [7, 8, 9, 6, 3, 2, 1];
-  function getOctant(angle) {
-    for (let i = 0; i < octantAngles.length; i++) {
-      const left = octantAngles[i];
-      const right = octantAngles[i + 1];
-      if (angle >= left && angle < right)
-        return octantIndices[i];
-    }
-    return 4;
   }
 
   // src/components/AnimationController.ts
@@ -435,6 +473,9 @@
       if (this.checkAnim(animation))
         return;
       this.currentAnimation = animation;
+      const a = this.sheet.animations[animation];
+      if (this.currentFrameIndex >= a.frames.length)
+        this.currentFrameIndex = 0;
     }
     draw(ctx, o) {
       const f = this.sheet.animations[this.currentAnimation].frames[this.currentFrameIndex];
@@ -457,6 +498,40 @@
     }
   };
 
+  // src/tools/drawOutlined.ts
+  function drawOutlined(ctx, path, fill, stroke = fill, fillAlpha = 0.1, strokeAlpha = fillAlpha * 2, strokeWidth = 2) {
+    ctx.globalAlpha = fillAlpha;
+    ctx.fillStyle = fill;
+    ctx.fill(path);
+    ctx.globalAlpha = strokeAlpha;
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = strokeWidth;
+    ctx.stroke(path);
+    ctx.globalAlpha = 1;
+  }
+
+  // src/tools/getOctant.ts
+  var octantAngles = [
+    -7 * Math.PI / 8,
+    -5 * Math.PI / 8,
+    -3 * Math.PI / 8,
+    -1 * Math.PI / 8,
+    1 * Math.PI / 8,
+    3 * Math.PI / 8,
+    5 * Math.PI / 8,
+    7 * Math.PI / 8
+  ];
+  var octantIndices = [7, 8, 9, 6, 3, 2, 1];
+  function getOctant(angle) {
+    for (let i = 0; i < octantAngles.length; i++) {
+      const left = octantAngles[i];
+      const right = octantAngles[i + 1];
+      if (angle >= left && angle < right)
+        return octantIndices[i];
+    }
+    return 4;
+  }
+
   // src/tools/makeCylinderPath.ts
   function makeCylinderPath(x, y, radius, height) {
     const path = new Path2D();
@@ -465,6 +540,102 @@
     path.lineTo(x + radius, y);
     return path;
   }
+
+  // src/entities/EntityBase.ts
+  var EntityBase = class {
+    constructor(g, spriteSheet, startAnimation, resetAnimations, position, radius, height, heading = 0) {
+      this.g = g;
+      this.position = position;
+      this.radius = radius;
+      this.height = height;
+      this.heading = heading;
+      this.prefix = startAnimation;
+      this.anim = new AnimationController(g, spriteSheet, `${startAnimation}2`);
+      this.resetPrefixes = new Set(resetAnimations);
+      g.render.add(this);
+    }
+    animate(prefix) {
+      const octant = getOctant(this.heading);
+      const id = `${prefix}${octant}`;
+      if (this.prefix !== prefix && (this.resetPrefixes.has(prefix) || this.resetPrefixes.has(this.prefix)))
+        this.anim.play(id);
+      else
+        this.anim.shift(id);
+      this.prefix = prefix;
+    }
+    draw(ctx, o, fl) {
+      if (fl.attackBox && this.attackRange) {
+        const path = makeCylinderPath(
+          o.x,
+          o.y,
+          this.radius + this.attackRange,
+          this.height
+        );
+        drawOutlined(ctx, path, "red");
+      }
+      if (fl.hitBox) {
+        const path = makeCylinderPath(o.x, o.y, this.radius, this.height);
+        drawOutlined(ctx, path, "blue");
+      }
+      this.anim.draw(ctx, o);
+    }
+  };
+
+  // src/entities/Fallen.ts
+  var Fallen = class extends EntityBase {
+    constructor(g, position = xy(0, 0), heading = 0, attackRange = 20) {
+      super(g, FallenSpriteSheet, "idle", ["move"], position, 20, 25, heading);
+      this.attackRange = attackRange;
+      this.onTick = () => {
+        const player = this.g.player;
+        this.heading = betweenXY(player.position, this.position);
+        const distance = euclideanDistance(player.position, this.position);
+        const moving = distance > player.radius + this.radius + this.attackRange;
+        this.animate(moving ? "move" : "idle");
+      };
+      g.addEventListener("Tick", this.onTick, { passive: true });
+    }
+  };
+
+  // src/img/diablo-rogue-lightarmour-bow.png
+  var diablo_rogue_lightarmour_bow_default = "./diablo-rogue-lightarmour-bow-RBMJG63H.png";
+
+  // src/animations/Rogue.ts
+  var AttackRelease = "attack.release";
+  var AttackOver = "attack.over";
+  var RogueFire = (data) => ({
+    frames: data.frames.map(
+      (frame, i) => i === 7 ? { id: frame.id, duration: frame.duration, trigger: AttackRelease } : frame
+    ),
+    endTrigger: AttackOver,
+    offset: xy(-64, -108)
+  });
+  var RogueSpriteSheet = makeSpriteSheet(diablo_rogue_lightarmour_bow_default, xy(-48, -76), [
+    makeAnimation("idle2", 8, 100, 0, 1046, 96, 94, loop),
+    makeAnimation("idle1", 8, 100, 0, 1143, 96, 94, loop),
+    makeAnimation("idle4", 8, 100, 0, 1240, 96, 94, loop),
+    makeAnimation("idle7", 8, 100, 0, 1337, 96, 94, loop),
+    makeAnimation("idle8", 8, 100, 0, 1434, 96, 94, loop),
+    makeAnimation("idle9", 8, 100, 0, 1531, 96, 94, loop),
+    makeAnimation("idle6", 8, 100, 0, 1628, 96, 94, loop),
+    makeAnimation("idle3", 8, 100, 0, 1725, 96, 94, loop),
+    makeAnimation("move2", 8, 50, 2690, 1046, 96, 94, loop),
+    makeAnimation("move1", 8, 50, 2690, 1143, 96, 94, loop),
+    makeAnimation("move4", 8, 50, 2690, 1240, 96, 94, loop),
+    makeAnimation("move7", 8, 50, 2690, 1337, 96, 94, loop),
+    makeAnimation("move8", 8, 50, 2690, 1434, 96, 94, loop),
+    makeAnimation("move9", 8, 50, 2690, 1531, 96, 94, loop),
+    makeAnimation("move6", 8, 50, 2690, 1628, 96, 94, loop),
+    makeAnimation("move3", 8, 50, 2690, 1725, 96, 94, loop),
+    makeAnimation("fire2", 12, 50, 0, 8, 128, 126, RogueFire),
+    makeAnimation("fire1", 12, 50, 0, 137, 128, 126, RogueFire),
+    makeAnimation("fire4", 12, 50, 0, 266, 128, 126, RogueFire),
+    makeAnimation("fire7", 12, 50, 0, 395, 128, 126, RogueFire),
+    makeAnimation("fire8", 12, 50, 0, 524, 128, 126, RogueFire),
+    makeAnimation("fire9", 12, 50, 0, 653, 128, 126, RogueFire),
+    makeAnimation("fire6", 12, 50, 0, 782, 128, 126, RogueFire),
+    makeAnimation("fire3", 12, 50, 0, 911, 128, 126, RogueFire)
+  ]);
 
   // src/components/PlayerShot.ts
   var PlayerShot = class {
@@ -495,14 +666,19 @@
     }
   };
 
-  // src/components/Player.ts
-  var Player = class {
-    constructor(g, position = xy(0, 0), radius = 25, height = 55, heading = 0, moveSpeed = 0.6, projectileVelocity = 1.4) {
-      this.g = g;
-      this.position = position;
-      this.radius = radius;
-      this.height = height;
-      this.heading = heading;
+  // src/entities/Player.ts
+  var Player = class extends EntityBase {
+    constructor(g, position, heading = 0, moveSpeed = 0.6, projectileVelocity = 1.4) {
+      super(
+        g,
+        RogueSpriteSheet,
+        "idle",
+        ["move", "fire"],
+        position,
+        25,
+        55,
+        heading
+      );
       this.moveSpeed = moveSpeed;
       this.projectileVelocity = projectileVelocity;
       this.onLeft = ({ detail }) => {
@@ -541,7 +717,12 @@
           this.position = addXY(position, vectorXY(angle, amount));
           if (maxDistance <= amount || move.type === "pad")
             this.move = void 0;
+          else {
+            this.animate("move");
+            return;
+          }
         }
+        this.animate("idle");
       };
       this.onAnimationTrigger = ({
         detail: { controller, trigger }
@@ -571,10 +752,7 @@
         this.attack = void 0;
         this.animate("idle");
       };
-      this.anim = new AnimationController(g, RogueSpriteSheet, "idle2");
-      this.prefix = "idle";
       this.attacking = false;
-      g.render.add(this);
       g.addEventListener("LeftMouse", this.onLeft, { passive: true });
       g.addEventListener("RightMouse", this.onRight, { passive: true });
       g.addEventListener("JoypadButton", this.onJoypadButton, { passive: true });
@@ -584,66 +762,8 @@
         passive: true
       });
     }
-    animate(prefix) {
-      const octant = getOctant(this.heading);
-      const id = `${prefix}${octant}`;
-      if (prefix === "fire" || this.prefix === "fire")
-        this.anim.play(id);
-      else
-        this.anim.shift(id);
-      this.prefix = prefix;
-    }
     get canAct() {
       return !this.attacking;
-    }
-    draw(ctx, o) {
-      if (!this.attacking)
-        this.animate(this.move ? "move" : "idle");
-      this.anim.draw(ctx, o);
-    }
-  };
-
-  // src/components/ResourceManager.ts
-  var ResourceManager = class {
-    constructor(g) {
-      this.g = g;
-      this.promises = /* @__PURE__ */ new Map();
-      this.loaders = [];
-      this.loaded = 0;
-      this.loading = 0;
-    }
-    get loadingText() {
-      if (this.loaded < this.loading)
-        return `Loading: ${this.loaded} / ${this.loading}`;
-    }
-    report() {
-      this.g.dispatchEvent(new LoadingEvent(this.loaded, this.loading));
-    }
-    start(src, promise) {
-      this.loading++;
-      this.report();
-      this.promises.set(src, promise);
-      this.loaders.push(
-        promise.then((arg) => {
-          this.loaded++;
-          this.report();
-          return arg;
-        })
-      );
-      return promise;
-    }
-    loadImage(src) {
-      const res = this.promises.get(src);
-      if (res)
-        return res;
-      return this.start(
-        src,
-        new Promise((resolve) => {
-          const img = new Image();
-          img.src = src;
-          img.addEventListener("load", () => resolve(img));
-        })
-      );
     }
   };
 
@@ -657,26 +777,29 @@
         this.ctx.clearRect(0, 0, this.size.width, this.size.height);
         const loadingText = this.res.loadingText;
         if (loadingText) {
-          this.ctx.font = "64px sans-serif";
-          this.ctx.fillStyle = "white";
-          this.ctx.textAlign = "center";
-          this.ctx.textBaseline = "middle";
+          setFont(this.ctx, "64px sans-serif", "white", "center", "middle");
           this.ctx.fillText(loadingText, this.size.width / 2, this.size.height / 2);
           return;
         }
         this.dispatchEvent(new ProcessInputEvent());
         this.dispatchEvent(new TickEvent(step));
-        this.dispatchEvent(new RenderEvent(this.ctx));
+        this.dispatchEvent(new RenderEvent(this.ctx, this.renderFlags));
       };
       this.render = /* @__PURE__ */ new Set();
+      this.renderFlags = { hitBox: false, attackBox: false };
       this.res = new ResourceManager(this);
       this.size = new CanvasResizer(canvas);
       this.fpsCounter = new FPSCounter(this);
       this.fuse = new FuseManager(this);
-      this.player = new Player(this);
+      this.player = new Player(this, xy(0, 0));
       this.camera = new Camera(this);
       this.mouse = new MouseHandler(this);
       this.joypad = new JoypadHandler(this);
+      this.enemies = /* @__PURE__ */ new Set([
+        new Fallen(this, xy(200, 0)),
+        new Fallen(this, xy(-10, 120))
+      ]);
+      new DebugKeyHandler(this);
       this.clock = new GameClock(this.tick, 50);
     }
   };

@@ -3,6 +3,7 @@ import {
   AttackRelease,
   RogueSpriteSheet,
 } from "../animations/Rogue";
+import PlayerShot from "../components/PlayerShot";
 import {
   AnimationTriggerEvent,
   JoypadButtonEvent,
@@ -13,14 +14,11 @@ import {
 } from "../events";
 import { Pixels, PixelsPerMillisecond, Radians } from "../flavours";
 import euclideanDistance from "../tools/euclideanDistance";
-import getOctant from "../tools/getOctant";
-import { addXY, betweenXY, vectorXY, xy } from "../tools/xy";
+import { addXY, betweenXY, vectorXY } from "../tools/xy";
 import { Listener } from "../types/Dispatcher";
-import Drawable from "../types/Drawable";
 import Game from "../types/Game";
 import XY from "../types/XY";
-import AnimationController from "./AnimationController";
-import PlayerShot from "./PlayerShot";
+import EntityBase from "./EntityBase";
 
 type PlayerAttack =
   | { type: "mouse"; target: XY<Pixels> }
@@ -30,30 +28,29 @@ type PlayerMove =
   | { type: "mouse"; target: XY<Pixels> }
   | { type: "pad"; angle: Radians };
 
-type AnimationPrefix = "fire" | "move" | "idle";
-
-export default class Player implements Drawable {
+export default class Player extends EntityBase<"idle" | "move" | "fire"> {
   attacking: boolean;
   attack?: PlayerAttack;
   move?: PlayerMove;
 
-  anim: AnimationController;
-  prefix: AnimationPrefix;
-
   constructor(
-    private g: Game,
-    public position: XY<Pixels> = xy(0, 0),
-    public radius: Pixels = 25,
-    public height: Pixels = 55,
-    public heading: Radians = 0,
+    g: Game,
+    position: XY<Pixels>,
+    heading: Radians = 0,
     public moveSpeed: PixelsPerMillisecond = 0.6,
     public projectileVelocity: PixelsPerMillisecond = 1.4,
   ) {
-    this.anim = new AnimationController(g, RogueSpriteSheet, "idle2");
-    this.prefix = "idle";
+    super(
+      g,
+      RogueSpriteSheet,
+      "idle",
+      ["move", "fire"],
+      position,
+      25,
+      55,
+      heading,
+    );
     this.attacking = false;
-
-    g.render.add(this);
 
     g.addEventListener("LeftMouse", this.onLeft, { passive: true });
     g.addEventListener("RightMouse", this.onRight, { passive: true });
@@ -64,16 +61,6 @@ export default class Player implements Drawable {
     g.addEventListener("AnimationTrigger", this.onAnimationTrigger, {
       passive: true,
     });
-  }
-
-  private animate(prefix: AnimationPrefix) {
-    const octant = getOctant(this.heading);
-    const id = `${prefix}${octant}`;
-
-    if (prefix === "fire" || this.prefix === "fire") this.anim.play(id);
-    else this.anim.shift(id);
-
-    this.prefix = prefix;
   }
 
   onLeft: Listener<LeftMouseEvent> = ({ detail }) => {
@@ -128,7 +115,13 @@ export default class Player implements Drawable {
       this.position = addXY(position, vectorXY(angle, amount));
 
       if (maxDistance <= amount || move.type === "pad") this.move = undefined;
+      else {
+        this.animate("move");
+        return;
+      }
     }
+
+    this.animate("idle");
   };
 
   onAnimationTrigger: Listener<AnimationTriggerEvent> = ({
@@ -164,21 +157,4 @@ export default class Player implements Drawable {
     this.attack = undefined;
     this.animate("idle");
   };
-
-  draw(ctx: CanvasRenderingContext2D, o: XY<Pixels>) {
-    if (!this.attacking) this.animate(this.move ? "move" : "idle");
-    this.anim.draw(ctx, o);
-
-    // const path = makeCylinderPath(o.x, o.y, this.radius, this.height);
-    // ctx.globalAlpha = 0.1;
-
-    // ctx.fillStyle = "blue";
-    // ctx.fill(path);
-
-    // ctx.strokeStyle = "skyblue";
-    // ctx.lineWidth = 2;
-    // ctx.stroke(path);
-
-    // ctx.globalAlpha = 1;
-  }
 }
