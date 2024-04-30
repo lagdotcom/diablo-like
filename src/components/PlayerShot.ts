@@ -2,8 +2,9 @@ import { TickEvent } from "../events";
 import {
   Milliseconds,
   Pixels,
-  PixelsPerMillisecond,
   Radians,
+  WorldU,
+  WorldUsPerMillisecond,
 } from "../flavours";
 import makeCylinderPath from "../tools/makeCylinderPath";
 import { addXY, vectorXY } from "../tools/xy";
@@ -18,10 +19,10 @@ export default class PlayerShot implements Drawable {
 
   constructor(
     private g: Game,
-    public position: XY<Pixels>,
+    public position: XY<WorldU>,
     public angle: Radians,
-    public velocity: PixelsPerMillisecond,
-    public radius: Pixels,
+    public velocity: WorldUsPerMillisecond,
+    public radius: WorldU,
     timeToLive: Milliseconds,
   ) {
     g.render.add(this);
@@ -36,12 +37,18 @@ export default class PlayerShot implements Drawable {
   };
 
   onTick: Listener<TickEvent> = ({ detail: { step } }) => {
-    const move = (this.velocity * step) as Pixels;
+    const move = (this.velocity * step) as WorldU;
     this.position = addXY(this.position, vectorXY(this.angle, move));
   };
 
   draw(ctx: CanvasRenderingContext2D, o: XY<Pixels>): void {
-    const path = makeCylinderPath(o.x, o.y - 20, this.radius, this.radius);
+    const path = makeCylinderPath(
+      this.g.projection,
+      o.x,
+      o.y - 20,
+      this.radius,
+      this.radius,
+    );
 
     ctx.fillStyle = "red";
     ctx.fill(path);

@@ -13,6 +13,12 @@ interface Math {
   cos(angle: import("./flavours").Radians): number;
 
   /**
+   * Returns the larger of a set of supplied numeric expressions.
+   * @param values Numeric expressions to be evaluated.
+   */
+  max<T extends number>(...values: T[]): T;
+
+  /**
    * Returns the smaller of a set of supplied numeric expressions.
    * @param values Numeric expressions to be evaluated.
    */

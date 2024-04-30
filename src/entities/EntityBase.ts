@@ -1,5 +1,5 @@
 import AnimationController from "../components/AnimationController";
-import { Pixels, Radians } from "../flavours";
+import { Pixels, Radians, WorldU } from "../flavours";
 import drawOutlined from "../tools/drawOutlined";
 import getOctant from "../tools/getOctant";
 import makeCylinderPath from "../tools/makeCylinderPath";
@@ -11,7 +11,7 @@ import XY from "../types/XY";
 
 export default class EntityBase<TPrefix> implements Drawable {
   anim: AnimationController;
-  attackRange?: Pixels;
+  attackRange?: WorldU;
   prefix: TPrefix;
   resetPrefixes: Set<TPrefix>;
 
@@ -20,9 +20,9 @@ export default class EntityBase<TPrefix> implements Drawable {
     spriteSheet: SpriteSheet,
     startAnimation: TPrefix,
     resetAnimations: TPrefix[],
-    public position: XY<Pixels>,
-    public radius: Pixels,
-    public height: Pixels,
+    public position: XY<WorldU>,
+    public radius: WorldU,
+    public height: WorldU,
     public heading: Radians = 0,
   ) {
     this.prefix = startAnimation;
@@ -33,7 +33,7 @@ export default class EntityBase<TPrefix> implements Drawable {
   }
 
   protected animate(prefix: TPrefix) {
-    const octant = getOctant(this.heading);
+    const octant = getOctant(this.heading + this.g.projection.headingOffset);
     const id = `${prefix}${octant}`;
 
     if (
@@ -49,6 +49,7 @@ export default class EntityBase<TPrefix> implements Drawable {
   draw(ctx: CanvasRenderingContext2D, o: XY<Pixels>, fl: RenderFlags) {
     if (fl.attackBox && this.attackRange) {
       const path = makeCylinderPath(
+        this.g.projection,
         o.x,
         o.y,
         this.radius + this.attackRange,
@@ -58,7 +59,13 @@ export default class EntityBase<TPrefix> implements Drawable {
     }
 
     if (fl.hitBox) {
-      const path = makeCylinderPath(o.x, o.y, this.radius, this.height);
+      const path = makeCylinderPath(
+        this.g.projection,
+        o.x,
+        o.y,
+        this.radius,
+        this.height,
+      );
       drawOutlined(ctx, path, "blue");
     }
 

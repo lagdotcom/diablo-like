@@ -35,7 +35,9 @@ export default class MouseHandler {
   };
 
   onProcessInput: Listener<ProcessInputEvent> = () => {
-    const absolute = addXY(this.position, this.g.camera.offset);
+    const absolute = this.g.projection.screenToWorld(
+      addXY(this.g.camera.offset, this.position),
+    );
 
     if (this.left) this.g.dispatchEvent(new LeftMouseEvent(absolute));
     if (this.right) this.g.dispatchEvent(new RightMouseEvent(absolute));

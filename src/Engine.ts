@@ -1,10 +1,12 @@
 import Camera from "./components/Camera";
 import CanvasResizer from "./components/CanvasResizer";
 import DebugKeyHandler from "./components/DebugKeyHandler";
+import FlatProjection from "./components/FlatProjection";
 import FPSCounter from "./components/FPSCounter";
 import FuseManager from "./components/FuseManager";
 import GameClock, { TickFunction } from "./components/GameClock";
 import JoypadHandler from "./components/JoypadHandler";
+import MapGrid from "./components/MapGrid";
 import MouseHandler from "./components/MouseHandler";
 import ResourceManager from "./components/ResourceManager";
 import EntityBase from "./entities/EntityBase";
@@ -15,6 +17,7 @@ import setFont from "./tools/setFont";
 import { xy } from "./tools/xy";
 import Drawable from "./types/Drawable";
 import Game from "./types/Game";
+import Projection from "./types/Projection";
 import RenderFlags from "./types/RenderFlags";
 
 export default class Engine extends EventTarget implements Game {
@@ -26,6 +29,7 @@ export default class Engine extends EventTarget implements Game {
   joypad: JoypadHandler;
   mouse: MouseHandler;
   player: Player;
+  projection: Projection;
   res: ResourceManager;
   size: CanvasResizer;
   render: Set<Drawable>;
@@ -40,10 +44,12 @@ export default class Engine extends EventTarget implements Game {
     this.renderFlags = { hitBox: false, attackBox: false };
     this.res = new ResourceManager(this);
     this.size = new CanvasResizer(canvas);
+    this.projection = new FlatProjection();
 
     this.fpsCounter = new FPSCounter(this);
     this.fuse = new FuseManager(this);
     this.player = new Player(this, xy(0, 0));
+    new MapGrid(this);
     this.camera = new Camera(this);
     this.mouse = new MouseHandler(this);
     this.joypad = new JoypadHandler(this);

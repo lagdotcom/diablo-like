@@ -22,6 +22,7 @@ import {
 import { Pixels } from "../flavours";
 import Dispatcher from "./Dispatcher";
 import Drawable from "./Drawable";
+import Projection from "./Projection";
 import RenderFlags from "./RenderFlags";
 import XY from "./XY";
 
@@ -46,6 +47,7 @@ export default interface Game
   joypad: JoypadHandler;
   mouse: MouseHandler;
   player: Player;
+  projection: Projection;
   render: Set<Drawable>;
   renderFlags: RenderFlags;
   res: ResourceManager;

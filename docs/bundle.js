@@ -23,13 +23,14 @@
         this.size = xy(width, height);
       };
       this.onRender = ({ detail: { ctx, flags } }) => {
-        for (const r of this.renderList) {
-          const offset = subXY(r.position, this.offset);
-          r.draw(ctx, offset, flags);
+        const { renderList, g, offset } = this;
+        for (const r of renderList) {
+          const screen = subXY(g.projection.worldToScreen(r.position), offset);
+          r.draw(ctx, screen, flags);
         }
       };
       this.size = g.size.xy;
-      this.position = g.player.position;
+      this.focus = g.projection.worldToScreen(g.player.position);
       g.size.addEventListener("CanvasResize", this.onResize, { passive: true });
       g.addEventListener("Render", this.onRender, { passive: true });
     }
@@ -37,7 +38,7 @@
       return xy(this.size.x / 2, this.size.y / 2);
     }
     get offset() {
-      return subXY(this.position, this.halfSize);
+      return subXY(this.focus, this.halfSize);
     }
     get renderList() {
       const list = [];
@@ -152,6 +153,26 @@
         setFont(ctx, "24px sans-serif", "white", "left", "bottom");
         ctx.fillText("[H]it box / [A]ttack box", 8, g.size.height - 8);
       });
+    }
+  };
+
+  // src/components/FlatProjection.ts
+  var FlatProjection = class {
+    constructor(scaleY = 1, scaleH = 1) {
+      this.scaleY = scaleY;
+      this.scaleH = scaleH;
+      this.headingOffset = 0;
+    }
+    screenToWorld(screen) {
+      const { x, y } = screen;
+      return { x, y: y * this.scaleY };
+    }
+    worldToScreen(logical) {
+      const { x, y } = logical;
+      return { x, y: y / this.scaleY };
+    }
+    getHeight(height) {
+      return height / this.scaleH;
     }
   };
 
@@ -278,6 +299,48 @@
     }
   };
 
+  // src/components/MapGrid.ts
+  var MapGrid = class {
+    constructor(g, size = 50) {
+      this.g = g;
+      this.size = size;
+      this.onRender = ({ detail: { ctx } }) => {
+        const { g, size } = this;
+        const { camera, projection } = g;
+        const sw = g.size.width / 2;
+        const sh = g.size.height / 2;
+        const tl = projection.screenToWorld({ x: -sw, y: -sh });
+        const tr = projection.screenToWorld({ x: sw, y: -sh });
+        const br = projection.screenToWorld({ x: sw, y: sh });
+        const bl = projection.screenToWorld({ x: -sw, y: sh });
+        const minX = Math.min(tl.x, tr.x, br.x, bl.x);
+        const maxX = Math.max(tl.x, tr.x, br.x, bl.x);
+        const minY = Math.min(tl.y, tr.y, br.y, bl.y);
+        const maxY = Math.max(tl.y, tr.y, br.y, bl.y);
+        ctx.globalAlpha = 0.5;
+        ctx.strokeStyle = "cyan";
+        for (let y = minY; y <= maxY; y += size) {
+          const a = subXY(projection.worldToScreen({ x: minX, y }), camera.offset);
+          const b = subXY(projection.worldToScreen({ x: maxX, y }), camera.offset);
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+        }
+        for (let x = minX; x <= maxX; x += size) {
+          const a = subXY(projection.worldToScreen({ x, y: minY }), camera.offset);
+          const b = subXY(projection.worldToScreen({ x, y: maxY }), camera.offset);
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      };
+      g.addEventListener("Render", this.onRender, { passive: true });
+    }
+  };
+
   // src/components/MouseHandler.ts
   var MouseHandler = class {
     constructor(g) {
@@ -292,7 +355,9 @@
         this.right = false;
       };
       this.onProcessInput = () => {
-        const absolute = addXY(this.position, this.g.camera.offset);
+        const absolute = this.g.projection.screenToWorld(
+          addXY(this.g.camera.offset, this.position)
+        );
         if (this.left)
           this.g.dispatchEvent(new LeftMouseEvent(absolute));
         if (this.right)
@@ -533,10 +598,11 @@
   }
 
   // src/tools/makeCylinderPath.ts
-  function makeCylinderPath(x, y, radius, height) {
+  function makeCylinderPath(proj, x, y, radius, height) {
+    const radiusY = proj.getHeight(radius);
     const path = new Path2D();
-    path.ellipse(x, y, radius, radius / 2, 0, 0, Math.PI);
-    path.ellipse(x, y - height, radius, radius / 2, 0, Math.PI, Math.PI * 2);
+    path.ellipse(x, y, radius, radiusY, 0, 0, Math.PI);
+    path.ellipse(x, y - height, radius, radiusY, 0, Math.PI, Math.PI * 2);
     path.lineTo(x + radius, y);
     return path;
   }
@@ -555,7 +621,7 @@
       g.render.add(this);
     }
     animate(prefix) {
-      const octant = getOctant(this.heading);
+      const octant = getOctant(this.heading + this.g.projection.headingOffset);
       const id = `${prefix}${octant}`;
       if (this.prefix !== prefix && (this.resetPrefixes.has(prefix) || this.resetPrefixes.has(this.prefix)))
         this.anim.play(id);
@@ -566,6 +632,7 @@
     draw(ctx, o, fl) {
       if (fl.attackBox && this.attackRange) {
         const path = makeCylinderPath(
+          this.g.projection,
           o.x,
           o.y,
           this.radius + this.attackRange,
@@ -574,7 +641,13 @@
         drawOutlined(ctx, path, "red");
       }
       if (fl.hitBox) {
-        const path = makeCylinderPath(o.x, o.y, this.radius, this.height);
+        const path = makeCylinderPath(
+          this.g.projection,
+          o.x,
+          o.y,
+          this.radius,
+          this.height
+        );
         drawOutlined(ctx, path, "blue");
       }
       this.anim.draw(ctx, o);
@@ -658,7 +731,13 @@
       g.addEventListener("Tick", this.onTick, { passive: true });
     }
     draw(ctx, o) {
-      const path = makeCylinderPath(o.x, o.y - 20, this.radius, this.radius);
+      const path = makeCylinderPath(
+        this.g.projection,
+        o.x,
+        o.y - 20,
+        this.radius,
+        this.radius
+      );
       ctx.fillStyle = "red";
       ctx.fill(path);
       ctx.strokeStyle = "orange";
@@ -789,9 +868,11 @@
       this.renderFlags = { hitBox: false, attackBox: false };
       this.res = new ResourceManager(this);
       this.size = new CanvasResizer(canvas);
+      this.projection = new FlatProjection();
       this.fpsCounter = new FPSCounter(this);
       this.fuse = new FuseManager(this);
       this.player = new Player(this, xy(0, 0));
+      new MapGrid(this);
       this.camera = new Camera(this);
       this.mouse = new MouseHandler(this);
       this.joypad = new JoypadHandler(this);

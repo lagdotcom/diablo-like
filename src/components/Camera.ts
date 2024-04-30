@@ -8,11 +8,11 @@ import XY from "../types/XY";
 
 export default class Camera {
   size: XY<Pixels>;
-  position: XY<Pixels>;
+  focus: XY<Pixels>;
 
   constructor(private g: Game) {
     this.size = g.size.xy;
-    this.position = g.player.position;
+    this.focus = g.projection.worldToScreen(g.player.position);
 
     g.size.addEventListener("CanvasResize", this.onResize, { passive: true });
     g.addEventListener("Render", this.onRender, { passive: true });
@@ -23,7 +23,7 @@ export default class Camera {
   }
 
   get offset() {
-    return subXY(this.position, this.halfSize);
+    return subXY(this.focus, this.halfSize);
   }
 
   get renderList() {
@@ -42,9 +42,11 @@ export default class Camera {
   };
 
   onRender: Listener<RenderEvent> = ({ detail: { ctx, flags } }) => {
-    for (const r of this.renderList) {
-      const offset = subXY(r.position, this.offset);
-      r.draw(ctx, offset, flags);
+    const { renderList, g, offset } = this;
+
+    for (const r of renderList) {
+      const screen = subXY(g.projection.worldToScreen(r.position), offset);
+      r.draw(ctx, screen, flags);
     }
   };
 }

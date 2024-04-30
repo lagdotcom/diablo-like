@@ -12,7 +12,7 @@ import {
   RightMouseEvent,
   TickEvent,
 } from "../events";
-import { Pixels, PixelsPerMillisecond, Radians } from "../flavours";
+import { Pixels, Radians, WorldU, WorldUsPerMillisecond } from "../flavours";
 import euclideanDistance from "../tools/euclideanDistance";
 import { addXY, betweenXY, vectorXY } from "../tools/xy";
 import { Listener } from "../types/Dispatcher";
@@ -21,11 +21,11 @@ import XY from "../types/XY";
 import EntityBase from "./EntityBase";
 
 type PlayerAttack =
-  | { type: "mouse"; target: XY<Pixels> }
+  | { type: "mouse"; target: XY<WorldU> }
   | { type: "pad"; angle: Radians };
 
 type PlayerMove =
-  | { type: "mouse"; target: XY<Pixels> }
+  | { type: "mouse"; target: XY<WorldU> }
   | { type: "pad"; angle: Radians };
 
 export default class Player extends EntityBase<"idle" | "move" | "fire"> {
@@ -35,10 +35,10 @@ export default class Player extends EntityBase<"idle" | "move" | "fire"> {
 
   constructor(
     g: Game,
-    position: XY<Pixels>,
+    position: XY<WorldU>,
     heading: Radians = 0,
-    public moveSpeed: PixelsPerMillisecond = 0.6,
-    public projectileVelocity: PixelsPerMillisecond = 1.4,
+    public moveSpeed: WorldUsPerMillisecond = 0.6,
+    public projectileVelocity: WorldUsPerMillisecond = 1.4,
   ) {
     super(
       g,

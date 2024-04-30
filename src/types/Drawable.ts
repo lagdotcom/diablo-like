@@ -1,10 +1,10 @@
-import { Pixels } from "../flavours";
+import { Pixels, WorldU } from "../flavours";
 import RenderFlags from "./RenderFlags";
 import XY from "./XY";
 
 export default interface Drawable {
-  position: XY<Pixels>;
-  radius: Pixels;
+  position: XY<WorldU>;
+  radius: WorldU;
 
   draw(
     ctx: CanvasRenderingContext2D,
