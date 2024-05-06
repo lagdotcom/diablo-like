@@ -1,13 +1,14 @@
 import AnimationController from "../components/AnimationController";
 import { Pixels, Radians, Tiles } from "../flavours";
 import getOctant from "../tools/getOctant";
+import { roundXY } from "../tools/xy";
 import Drawable from "../types/Drawable";
 import Game from "../types/Game";
 import RenderFlags from "../types/RenderFlags";
 import { SpriteSheet } from "../types/SpriteAnimation";
 import XY from "../types/XY";
 
-export default class EntityBase<TPrefix> implements Drawable {
+export default class EntityBase<TPrefix = unknown> implements Drawable {
   anim: AnimationController;
   attackRange?: Tiles;
   prefix: TPrefix;
@@ -28,6 +29,10 @@ export default class EntityBase<TPrefix> implements Drawable {
     this.resetPrefixes = new Set(resetAnimations);
 
     g.render.add(this);
+  }
+
+  get positionRounded() {
+    return roundXY(this.position);
   }
 
   protected animate(prefix: TPrefix) {

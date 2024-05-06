@@ -42,6 +42,7 @@ export default class Engine extends EventTarget implements Game {
     this.renderFlags = {
       cameraDebug: false,
       imageOutline: false,
+      pathDebug: true,
       showFPS: true,
     };
     this.res = new ResourceManager(this);

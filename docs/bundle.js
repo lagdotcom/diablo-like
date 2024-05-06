@@ -72,10 +72,13 @@
   function roundXY({ x, y }) {
     return { x: Math.round(x), y: Math.round(y) };
   }
-  function printXY({ x, y }) {
-    if (isNaN(x) || isNaN(y))
+  function invalidXY({ x, y }) {
+    return isNaN(x) || isNaN(y);
+  }
+  function printXY(pos) {
+    if (invalidXY(pos))
       return "--";
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
+    return `${pos.x.toFixed(1)},${pos.y.toFixed(1)}`;
   }
 
   // src/components/CanvasResizer.ts
@@ -382,6 +385,9 @@
       this.resetPrefixes = new Set(resetAnimations);
       g.render.add(this);
     }
+    get positionRounded() {
+      return roundXY(this.position);
+    }
     animate(prefix) {
       const octant = getOctant(this.heading);
       const id = `${prefix}${octant}`;
@@ -570,23 +576,6 @@
               return this.onAttackFinish();
           }
       };
-      this.onAttackLaunch = () => {
-        const { attack, position } = this;
-        if (attack)
-          new PlayerShot(
-            this.g,
-            this.position,
-            attack.type === "mouse" ? betweenXY(attack.target, position) : attack.angle,
-            this.projectileVelocity,
-            1,
-            3e3
-          );
-      };
-      this.onAttackFinish = () => {
-        this.attacking = false;
-        this.attack = void 0;
-        this.animate("idle");
-      };
       this.attacking = false;
       g.addEventListener("LeftMouse", this.onLeft, { passive: true });
       g.addEventListener("RightMouse", this.onRight, { passive: true });
@@ -600,7 +589,158 @@
     get canAct() {
       return !this.attacking;
     }
+    onAttackLaunch() {
+      const { attack, position } = this;
+      if (attack)
+        new PlayerShot(
+          this.g,
+          this.position,
+          attack.type === "mouse" ? betweenXY(attack.target, position) : attack.angle,
+          this.projectileVelocity,
+          1,
+          3e3
+        );
+    }
+    onAttackFinish() {
+      this.attacking = false;
+      this.attack = void 0;
+      this.animate("idle");
+    }
   };
+
+  // src/tools/isDefined.ts
+  function isDefined(object) {
+    return typeof object !== "undefined";
+  }
+
+  // src/pathfinding/PriorityQueue.ts
+  var PriorityQueue = class {
+    constructor() {
+      this.list = [];
+      this.dirty = false;
+    }
+    put(location, priority) {
+      this.list.push({ location, priority });
+      this.dirty = true;
+    }
+    sort() {
+      this.list.sort((a, b) => a.priority - b.priority);
+      this.dirty = false;
+    }
+    get() {
+      if (this.dirty)
+        this.sort();
+      const item = this.list.shift();
+      if (!item)
+        throw new Error("queue is empty");
+      return item.location;
+    }
+    empty() {
+      return this.list.length === 0;
+    }
+  };
+
+  // src/pathfinding/GridLocation.ts
+  var GridLocation = class {
+    constructor(x, y) {
+      this.x = x;
+      this.y = y;
+    }
+  };
+
+  // src/pathfinding/WeightedGraph.ts
+  var ROOT2 = Math.sqrt(2);
+  var WeightedGraph = class {
+    constructor(enemies) {
+      this.locations = /* @__PURE__ */ new Map();
+      this.blocked = new Set(
+        Array.from(
+          enemies,
+          (e) => this.at(e.positionRounded.x, e.positionRounded.y)
+        )
+      );
+    }
+    isNavigable(pos) {
+      return !this.blocked.has(pos);
+    }
+    at(x, y) {
+      const tag = `${x},${y}`;
+      const old = this.locations.get(tag);
+      if (old)
+        return old;
+      const loc = new GridLocation(x, y);
+      this.locations.set(tag, loc);
+      return loc;
+    }
+    *neighbours(loc) {
+      for (let y = -1; y <= 1; y++)
+        for (let x = -1; x <= 1; x++) {
+          if (x || y) {
+            const pos = this.at(loc.x + x, loc.y + y);
+            if (this.isNavigable(pos))
+              yield pos;
+          }
+        }
+    }
+    cost(a, b) {
+      const ex = a.x !== b.x;
+      const ey = a.y !== b.y;
+      if (ex && ey)
+        return ROOT2;
+      return 1;
+    }
+  };
+
+  // src/pathfinding/astar.ts
+  var CrashMap = class extends Map {
+    getOrDie(key) {
+      const value = super.get(key);
+      if (typeof value === "undefined")
+        throw new Error(`No such key: ${key}`);
+      return value;
+    }
+  };
+  function heuristic(a, b) {
+    return euclideanDistance(a, b);
+  }
+  function aStarSearch(graph, start, goal, max) {
+    const frontier = new PriorityQueue();
+    frontier.put(start, 0);
+    const cameFrom = /* @__PURE__ */ new Map();
+    const costSoFar = new CrashMap([[start, 0]]);
+    while (!frontier.empty()) {
+      const current = frontier.get();
+      if (current == goal)
+        break;
+      for (const next of graph.neighbours(current)) {
+        const newCost = costSoFar.getOrDie(current) + graph.cost(current, next);
+        if (newCost > max)
+          continue;
+        const nextCost = costSoFar.get(next);
+        if (!isDefined(nextCost) || newCost < nextCost) {
+          costSoFar.set(next, newCost);
+          const priority = newCost + heuristic(next, goal);
+          frontier.put(next, priority);
+          cameFrom.set(next, current);
+        }
+      }
+    }
+    return { cameFrom, costSoFar };
+  }
+  function getAStarPath(enemies, from, to) {
+    const graph = new WeightedGraph(enemies);
+    const start = graph.at(from.x, from.y);
+    const goal = graph.at(to.x, to.y);
+    const max = euclideanDistance(from, to) + 10;
+    const { cameFrom, costSoFar } = aStarSearch(graph, start, goal, max);
+    const path = [];
+    let current = goal;
+    while (current) {
+      path.push(current);
+      current = cameFrom.get(current);
+    }
+    return { path, costSoFar };
+  }
 
   // src/tools/setFont.ts
   function setFont(ctx, font, colour, alignX, alignY) {
@@ -621,11 +761,35 @@
           g.renderFlags.showFPS = !g.renderFlags.showFPS;
         if (e.key === "o")
           g.renderFlags.imageOutline = !g.renderFlags.imageOutline;
+        if (e.key === "p")
+          g.renderFlags.pathDebug = !g.renderFlags.pathDebug;
       });
-      g.addEventListener("Render", ({ detail: { ctx } }) => {
+      g.addEventListener("Render", ({ detail: { ctx, flags } }) => {
         ctx.globalAlpha = 1;
         setFont(ctx, "16px sans-serif", "white", "left", "bottom");
-        ctx.fillText("[C]amera, [F]PS, [O]utline", 8, g.size.height - 8);
+        ctx.fillText("[C]amera, [F]PS, [O]utline, [P]ath", 8, g.size.height - 8);
+        if (flags.pathDebug) {
+          const { positionRounded: position } = g.player;
+          if (!invalidXY(this.g.mouse.position)) {
+            const { path, costSoFar } = getAStarPath(
+              g.enemies,
+              position,
+              g.mouse.position
+            );
+            ctx.globalAlpha = 0.1;
+            ctx.fillStyle = "white";
+            for (const t of path) {
+              const x = makeTilePath(g.camera, t);
+              ctx.fill(x);
+            }
+            ctx.globalAlpha = 0.3;
+            setFont(ctx, "8px sans-serif", "white", "center", "middle");
+            for (const [pos, amount] of costSoFar) {
+              const screen = g.camera.worldToScreen(pos);
+              ctx.fillText(amount.toFixed(1), screen.x, screen.y);
+            }
+          }
+        }
       });
     }
   };
@@ -858,6 +1022,7 @@
       this.renderFlags = {
         cameraDebug: false,
         imageOutline: false,
+        pathDebug: true,
         showFPS: true
       };
       this.res = new ResourceManager(this);

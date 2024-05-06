@@ -12,7 +12,7 @@ import {
   RightMouseEvent,
   TickEvent,
 } from "../events";
-import { Pixels, Radians, Tiles, TilesPerMillisecond } from "../flavours";
+import { Radians, Tiles, TilesPerMillisecond } from "../flavours";
 import euclideanDistance from "../tools/euclideanDistance";
 import { tilesPerSecond } from "../tools/units";
 import { addXY, betweenXY, eqXY, vectorXY } from "../tools/xy";
@@ -64,6 +64,10 @@ export default class Player extends EntityBase<"idle" | "move" | "fire"> {
     });
   }
 
+  get canAct() {
+    return !this.attacking;
+  }
+
   onLeft: Listener<LeftMouseEvent> = ({ detail }) => {
     if (!eqXY(this.position, detail))
       this.move = { type: "mouse", target: detail };
@@ -84,10 +88,6 @@ export default class Player extends EntityBase<"idle" | "move" | "fire"> {
       this.attack = { type: "pad", angle: this.heading };
   };
 
-  get canAct() {
-    return !this.attacking;
-  }
-
   onTick: Listener<TickEvent> = ({ detail: { step } }) => {
     const { position, moveSpeed, attack, move } = this;
 
@@ -104,13 +104,13 @@ export default class Player extends EntityBase<"idle" | "move" | "fire"> {
     }
 
     if (move) {
-      const maxDistance =
+      const maxDistance: Tiles =
         move.type === "mouse"
           ? euclideanDistance(move.target, position)
           : Infinity;
       const angle =
         move.type === "mouse" ? betweenXY(move.target, position) : move.angle;
-      const amount = Math.min(maxDistance, (moveSpeed * step) as Pixels);
+      const amount = Math.min(maxDistance, (moveSpeed * step) as Tiles);
 
       this.heading = angle;
       this.position = addXY(position, vectorXY(angle, amount));
@@ -140,7 +140,7 @@ export default class Player extends EntityBase<"idle" | "move" | "fire"> {
       }
   };
 
-  onAttackLaunch = () => {
+  onAttackLaunch() {
     const { attack, position } = this;
 
     if (attack)
@@ -154,11 +154,11 @@ export default class Player extends EntityBase<"idle" | "move" | "fire"> {
         1,
         3000,
       );
-  };
+  }
 
-  onAttackFinish = () => {
+  onAttackFinish() {
     this.attacking = false;
     this.attack = undefined;
     this.animate("idle");
-  };
+  }
 }

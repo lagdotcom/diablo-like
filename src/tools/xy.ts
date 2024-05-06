@@ -27,7 +27,11 @@ export function roundXY<T extends number>({ x, y }: XY<T>) {
   return { x: Math.round(x), y: Math.round(y) } as XY<T>;
 }
 
-export function printXY<T extends number>({ x, y }: XY<T>) {
-  if (isNaN(x) || isNaN(y)) return "--";
-  return `${x.toFixed(1)},${y.toFixed(1)}`;
+export function invalidXY<T extends number>({ x, y }: XY<T>) {
+  return isNaN(x) || isNaN(y);
+}
+
+export function printXY<T extends number>(pos: XY<T>) {
+  if (invalidXY(pos)) return "--";
+  return `${pos.x.toFixed(1)},${pos.y.toFixed(1)}`;
 }
