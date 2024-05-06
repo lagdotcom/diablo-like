@@ -25,6 +25,12 @@ interface Math {
   min<T extends number>(...values: T[]): T;
 
   /**
+   * Returns a supplied numeric expression rounded to the nearest integer.
+   * @param x The value to be rounded to the nearest integer.
+   */
+  round<T extends number>(x: T): T;
+
+  /**
    * Returns the sine of a number.
    * @param x A numeric expression that contains an angle measured in radians.
    */

@@ -1,8 +1,6 @@
 import AnimationController from "../components/AnimationController";
-import { Pixels, Radians, WorldU } from "../flavours";
-import drawOutlined from "../tools/drawOutlined";
+import { Pixels, Radians, Tiles } from "../flavours";
 import getOctant from "../tools/getOctant";
-import makeCylinderPath from "../tools/makeCylinderPath";
 import Drawable from "../types/Drawable";
 import Game from "../types/Game";
 import RenderFlags from "../types/RenderFlags";
@@ -11,7 +9,7 @@ import XY from "../types/XY";
 
 export default class EntityBase<TPrefix> implements Drawable {
   anim: AnimationController;
-  attackRange?: WorldU;
+  attackRange?: Tiles;
   prefix: TPrefix;
   resetPrefixes: Set<TPrefix>;
 
@@ -20,9 +18,9 @@ export default class EntityBase<TPrefix> implements Drawable {
     spriteSheet: SpriteSheet,
     startAnimation: TPrefix,
     resetAnimations: TPrefix[],
-    public position: XY<WorldU>,
-    public radius: WorldU,
-    public height: WorldU,
+    public position: XY<Tiles>,
+    public radius: Tiles,
+    public height: Tiles,
     public heading: Radians = 0,
   ) {
     this.prefix = startAnimation;
@@ -33,7 +31,7 @@ export default class EntityBase<TPrefix> implements Drawable {
   }
 
   protected animate(prefix: TPrefix) {
-    const octant = getOctant(this.heading + this.g.projection.headingOffset);
+    const octant = getOctant(this.heading);
     const id = `${prefix}${octant}`;
 
     if (
@@ -47,28 +45,6 @@ export default class EntityBase<TPrefix> implements Drawable {
   }
 
   draw(ctx: CanvasRenderingContext2D, o: XY<Pixels>, fl: RenderFlags) {
-    if (fl.attackBox && this.attackRange) {
-      const path = makeCylinderPath(
-        this.g.projection,
-        o.x,
-        o.y,
-        this.radius + this.attackRange,
-        this.height,
-      );
-      drawOutlined(ctx, path, "red");
-    }
-
-    if (fl.hitBox) {
-      const path = makeCylinderPath(
-        this.g.projection,
-        o.x,
-        o.y,
-        this.radius,
-        this.height,
-      );
-      drawOutlined(ctx, path, "blue");
-    }
-
-    this.anim.draw(ctx, o);
+    this.anim.draw(ctx, o, fl.imageOutline);
   }
 }

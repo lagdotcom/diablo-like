@@ -1,9 +1,5 @@
-import Camera from "../components/Camera";
-import FPSCounter from "../components/FPSCounter";
 import FuseManager from "../components/FuseManager";
 import GameClock from "../components/GameClock";
-import JoypadHandler from "../components/JoypadHandler";
-import MouseHandler from "../components/MouseHandler";
 import ResourceManager from "../components/ResourceManager";
 import EntityBase from "../entities/EntityBase";
 import Player from "../entities/Player";
@@ -20,9 +16,13 @@ import {
   TickEvent,
 } from "../events";
 import { Pixels } from "../flavours";
+import JoypadHandler from "../inputs/JoypadHandler";
+import MouseHandler from "../inputs/MouseHandler";
+import IsometricCamera from "../visuals/Camera";
+import FPSCounter from "../visuals/FPSCounter";
+import MapGrid from "../visuals/MapGrid";
 import Dispatcher from "./Dispatcher";
 import Drawable from "./Drawable";
-import Projection from "./Projection";
 import RenderFlags from "./RenderFlags";
 import XY from "./XY";
 
@@ -38,16 +38,16 @@ export default interface Game
     RightMouse: RightMouseEvent;
     Tick: TickEvent;
   }> {
-  camera: Camera;
+  camera: IsometricCamera;
   canvas: HTMLCanvasElement;
   clock: GameClock;
   enemies: Set<EntityBase<unknown>>;
   fpsCounter: FPSCounter;
   fuse: FuseManager;
   joypad: JoypadHandler;
+  mapGrid: MapGrid;
   mouse: MouseHandler;
   player: Player;
-  projection: Projection;
   render: Set<Drawable>;
   renderFlags: RenderFlags;
   res: ResourceManager;

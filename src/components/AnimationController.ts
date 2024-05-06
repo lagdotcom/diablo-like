@@ -86,7 +86,7 @@ export default class AnimationController {
     if (this.spriteDuration <= 0) this.nextFrame();
   };
 
-  draw(ctx: CanvasRenderingContext2D, o: XY<Pixels>) {
+  draw(ctx: CanvasRenderingContext2D, o: XY<Pixels>, showOutline = false) {
     const f =
       this.sheet.animations[this.currentAnimation].frames[
         this.currentFrameIndex
@@ -95,19 +95,18 @@ export default class AnimationController {
 
     const { x: sx, y: sy } = s.position;
     const { x: w, y: h } = s.size;
-    const { x: dx, y: dy } = o;
-    const { x: ox, y: oy } = this.offset;
+    const { x: ox1, y: oy1 } = o;
+    const { x: ox2, y: oy2 } = this.offset;
 
-    ctx.drawImage(
-      this.img,
-      sx,
-      sy,
-      w,
-      h,
-      Math.round(dx + ox),
-      Math.round(dy + oy),
-      w,
-      h,
-    );
+    const ox = Math.round<Pixels>(ox1 + ox2);
+    const oy = Math.round<Pixels>(oy1 + oy2);
+
+    ctx.globalAlpha = 1;
+    ctx.drawImage(this.img, sx, sy, w, h, ox, oy, w, h);
+
+    if (showOutline) {
+      ctx.strokeStyle = "white";
+      ctx.strokeRect(ox, oy, w, h);
+    }
   }
 }

@@ -1,12 +1,6 @@
 import { TickEvent } from "../events";
-import {
-  Milliseconds,
-  Pixels,
-  Radians,
-  WorldU,
-  WorldUsPerMillisecond,
-} from "../flavours";
-import makeCylinderPath from "../tools/makeCylinderPath";
+import { Milliseconds, Radians, Tiles, TilesPerMillisecond } from "../flavours";
+import makeTilePath from "../tools/makeTilePath";
 import { addXY, vectorXY } from "../tools/xy";
 import { Listener } from "../types/Dispatcher";
 import Drawable from "../types/Drawable";
@@ -19,10 +13,10 @@ export default class PlayerShot implements Drawable {
 
   constructor(
     private g: Game,
-    public position: XY<WorldU>,
+    public position: XY<Tiles>,
     public angle: Radians,
-    public velocity: WorldUsPerMillisecond,
-    public radius: WorldU,
+    public velocity: TilesPerMillisecond,
+    public radius: Tiles,
     timeToLive: Milliseconds,
   ) {
     g.render.add(this);
@@ -37,22 +31,15 @@ export default class PlayerShot implements Drawable {
   };
 
   onTick: Listener<TickEvent> = ({ detail: { step } }) => {
-    const move = (this.velocity * step) as WorldU;
+    const move = (this.velocity * step) as Tiles;
     this.position = addXY(this.position, vectorXY(this.angle, move));
   };
 
-  draw(ctx: CanvasRenderingContext2D, o: XY<Pixels>): void {
-    const path = makeCylinderPath(
-      this.g.projection,
-      o.x,
-      o.y - 20,
-      this.radius,
-      this.radius,
-    );
-
+  draw(ctx: CanvasRenderingContext2D): void {
+    const path = makeTilePath(this.g.camera, this.position);
+    ctx.globalAlpha = 0.4;
     ctx.fillStyle = "red";
     ctx.fill(path);
-
     ctx.strokeStyle = "orange";
     ctx.stroke(path);
   }

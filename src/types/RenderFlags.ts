@@ -1,4 +1,5 @@
 export default interface RenderFlags {
-  hitBox?: boolean;
-  attackBox?: boolean;
+  cameraDebug: boolean;
+  imageOutline: boolean;
+  showFPS: boolean;
 }

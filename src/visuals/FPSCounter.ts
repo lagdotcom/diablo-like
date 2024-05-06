@@ -37,7 +37,9 @@ export default class FPSCounter {
     if (this.steps.length > this.samples) this.steps.shift();
   };
 
-  onRender: Listener<RenderEvent> = ({ detail: { ctx } }) => {
+  onRender: Listener<RenderEvent> = ({ detail: { ctx, flags } }) => {
+    if (!flags.showFPS) return;
+
     const { fps, x, y } = this;
     setFont(ctx, "24px sans-serif", "yellow", "end", "bottom");
     ctx.fillText(Math.round(fps).toString(), x, y);

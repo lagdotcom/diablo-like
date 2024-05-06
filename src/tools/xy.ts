@@ -18,3 +18,16 @@ export function subXY<T extends number>(a: XY<T>, b: XY<T>) {
 export function vectorXY<T extends number>(angle: Radians, length: T) {
   return xy(Math.cos(angle) * length, Math.sin(angle) * length) as XY<T>;
 }
+
+export function eqXY<T extends number>(a: XY<T>, b: XY<T>) {
+  return a.x === b.x && a.y === b.y;
+}
+
+export function roundXY<T extends number>({ x, y }: XY<T>) {
+  return { x: Math.round(x), y: Math.round(y) } as XY<T>;
+}
+
+export function printXY<T extends number>({ x, y }: XY<T>) {
+  if (isNaN(x) || isNaN(y)) return "--";
+  return `${x.toFixed(1)},${y.toFixed(1)}`;
+}

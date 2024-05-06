@@ -5,12 +5,14 @@ interface Flavouring<FlavourT> {
 type Flavour<T, FlavourT> = T & Flavouring<FlavourT>;
 
 export type ButtonIndex = Flavour<number, "ButtonIndex">;
+export type GamepadID = Flavour<number, "GamepadID">;
 export type Milliseconds = Flavour<number, "Milliseconds">;
 export type Pixels = Flavour<number, "Pixels">;
+export type PixelsPerTile = Flavour<number, "PixelsPerTile">;
 export type Radians = Flavour<number, "Radians">;
 export type RequestID = Flavour<number, "RequestID">;
-export type WorldU = Flavour<number, "WorldU">;
-export type WorldUsPerMillisecond = Flavour<number, "WorldUsPerMillisecond">;
+export type Tiles = Flavour<number, "Tiles">;
+export type TilesPerMillisecond = Flavour<number, "TilesPerMillisecond">;
 
 export type AnimationID = Flavour<string, "AnimationID">;
 export type AnimationTriggerID = Flavour<string, "AnimationTriggerID">;

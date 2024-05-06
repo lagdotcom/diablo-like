@@ -12,20 +12,21 @@ import {
   RightMouseEvent,
   TickEvent,
 } from "../events";
-import { Pixels, Radians, WorldU, WorldUsPerMillisecond } from "../flavours";
+import { Pixels, Radians, Tiles, TilesPerMillisecond } from "../flavours";
 import euclideanDistance from "../tools/euclideanDistance";
-import { addXY, betweenXY, vectorXY } from "../tools/xy";
+import { tilesPerSecond } from "../tools/units";
+import { addXY, betweenXY, eqXY, vectorXY } from "../tools/xy";
 import { Listener } from "../types/Dispatcher";
 import Game from "../types/Game";
 import XY from "../types/XY";
 import EntityBase from "./EntityBase";
 
 type PlayerAttack =
-  | { type: "mouse"; target: XY<WorldU> }
+  | { type: "mouse"; target: XY<Tiles> }
   | { type: "pad"; angle: Radians };
 
 type PlayerMove =
-  | { type: "mouse"; target: XY<WorldU> }
+  | { type: "mouse"; target: XY<Tiles> }
   | { type: "pad"; angle: Radians };
 
 export default class Player extends EntityBase<"idle" | "move" | "fire"> {
@@ -35,10 +36,10 @@ export default class Player extends EntityBase<"idle" | "move" | "fire"> {
 
   constructor(
     g: Game,
-    position: XY<WorldU>,
+    position: XY<Tiles>,
     heading: Radians = 0,
-    public moveSpeed: WorldUsPerMillisecond = 0.6,
-    public projectileVelocity: WorldUsPerMillisecond = 1.4,
+    public moveSpeed: TilesPerMillisecond = tilesPerSecond(6),
+    public projectileVelocity: TilesPerMillisecond = tilesPerSecond(12),
   ) {
     super(
       g,
@@ -46,8 +47,8 @@ export default class Player extends EntityBase<"idle" | "move" | "fire"> {
       "idle",
       ["move", "fire"],
       position,
-      25,
-      55,
+      1,
+      1,
       heading,
     );
     this.attacking = false;
@@ -64,7 +65,7 @@ export default class Player extends EntityBase<"idle" | "move" | "fire"> {
   }
 
   onLeft: Listener<LeftMouseEvent> = ({ detail }) => {
-    if (euclideanDistance(detail, this.position) > this.radius)
+    if (!eqXY(this.position, detail))
       this.move = { type: "mouse", target: detail };
     else this.heading = betweenXY(detail, this.position);
   };
@@ -120,6 +121,9 @@ export default class Player extends EntityBase<"idle" | "move" | "fire"> {
         return;
       }
     }
+    // else {
+    //   this.heading = betweenXY(this.g.mouse.position, position);
+    // }
 
     this.animate("idle");
   };
@@ -147,7 +151,7 @@ export default class Player extends EntityBase<"idle" | "move" | "fire"> {
           ? betweenXY(attack.target, position)
           : attack.angle,
         this.projectileVelocity,
-        8,
+        1,
         3000,
       );
   };

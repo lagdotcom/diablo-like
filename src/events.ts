@@ -5,7 +5,7 @@ import {
   Milliseconds,
   Pixels,
   Radians,
-  WorldU,
+  Tiles,
 } from "./flavours";
 import Empty from "./types/Empty";
 import RenderFlags from "./types/RenderFlags";
@@ -41,8 +41,8 @@ export class JoypadMoveEvent extends CustomEvent<Radians> {
   }
 }
 
-export class LeftMouseEvent extends CustomEvent<XY<WorldU>> {
-  constructor(detail: XY<WorldU>) {
+export class LeftMouseEvent extends CustomEvent<XY<Tiles>> {
+  constructor(detail: XY<Tiles>) {
     super("LeftMouse", { detail });
   }
 }
@@ -68,8 +68,8 @@ export class RenderEvent extends CustomEvent<{
   }
 }
 
-export class RightMouseEvent extends CustomEvent<XY<WorldU>> {
-  constructor(detail: XY<WorldU>) {
+export class RightMouseEvent extends CustomEvent<XY<Tiles>> {
+  constructor(detail: XY<Tiles>) {
     super("RightMouse", { detail });
   }
 }

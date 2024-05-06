@@ -3,11 +3,12 @@ import {
   JoypadMoveEvent,
   ProcessInputEvent,
 } from "../events";
+import { GamepadID } from "../flavours";
 import { Listener } from "../types/Dispatcher";
 import Game from "../types/Game";
 
 export default class JoypadHandler {
-  gamepad: number;
+  gamepad: GamepadID;
 
   constructor(
     private g: Game,
@@ -17,7 +18,7 @@ export default class JoypadHandler {
     window.addEventListener("gamepadconnected", this.onConnect);
   }
 
-  private connect(index: number) {
+  private connect(index: GamepadID) {
     this.gamepad = index;
 
     this.g.addEventListener("ProcessInput", this.onProcessInput);
@@ -40,8 +41,8 @@ export default class JoypadHandler {
     }
 
     const [x, y] = pad.axes;
-    const distance = x ** 2 + y ** 2;
-    if (distance > this.axisThreshold) {
+    const distanceSquared = x ** 2 + y ** 2;
+    if (distanceSquared > this.axisThreshold) {
       const angle = Math.atan2(y, x);
       this.g.dispatchEvent(new JoypadMoveEvent(angle));
     }
