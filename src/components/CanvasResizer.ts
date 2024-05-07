@@ -2,27 +2,28 @@ import { CanvasResizeEvent } from "../events";
 import { Pixels } from "../flavours";
 import { xy } from "../tools/xy";
 import Dispatcher from "../types/Dispatcher";
+import XY from "../types/XY";
 
-export default class CanvasResizer
-  extends EventTarget
-  implements Dispatcher<{ CanvasResize: CanvasResizeEvent }>
-{
+type CanvasEvents = Dispatcher<{ CanvasResize: CanvasResizeEvent }>;
+
+export default class CanvasResizer implements CanvasEvents {
+  e: EventTarget;
+  xy!: XY<Pixels>;
+  width!: number;
+  height!: number;
+
+  addEventListener: CanvasEvents["addEventListener"];
+  dispatchEvent: CanvasEvents["dispatchEvent"];
+  removeEventListener: CanvasEvents["removeEventListener"];
+
   constructor(private canvas: HTMLCanvasElement) {
-    super();
+    this.e = new EventTarget();
+    this.addEventListener = this.e.addEventListener.bind(this.e);
+    this.dispatchEvent = this.e.dispatchEvent.bind(this.e);
+    this.removeEventListener = this.e.removeEventListener.bind(this.e);
 
     window.addEventListener("resize", this.resize, { passive: true });
     this.resize();
-  }
-
-  get xy() {
-    return xy(this.width, this.height);
-  }
-
-  get width(): Pixels {
-    return this.canvas.width;
-  }
-  get height(): Pixels {
-    return this.canvas.height;
   }
 
   detach() {
@@ -36,6 +37,10 @@ export default class CanvasResizer
     this.canvas.style.width = `${width}px`;
     this.canvas.style.height = `${height}px`;
 
-    this.dispatchEvent(new CanvasResizeEvent(width, height));
+    this.width = width;
+    this.height = height;
+    this.xy = xy(width, height);
+
+    this.e.dispatchEvent(new CanvasResizeEvent(width, height));
   };
 }

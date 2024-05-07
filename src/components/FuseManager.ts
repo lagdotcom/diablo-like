@@ -1,7 +1,7 @@
 import { TickEvent } from "../events";
 import { Milliseconds } from "../flavours";
 import { Listener } from "../types/Dispatcher";
-import Game from "../types/Game";
+import GameEvents from "../types/GameEvents";
 
 export interface Fuse {
   active: boolean;
@@ -12,10 +12,10 @@ export interface Fuse {
 export default class FuseManager {
   fuses: Set<Fuse>;
 
-  constructor(g: Game) {
+  constructor(e: GameEvents) {
     this.fuses = new Set();
 
-    g.addEventListener("Tick", this.onTick);
+    e.addEventListener("Tick", this.onTick);
   }
 
   add(time: Milliseconds, callback: Fuse["callback"]) {

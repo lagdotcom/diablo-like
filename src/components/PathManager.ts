@@ -1,9 +1,10 @@
+import EntityBase from "../entities/EntityBase";
+import Player from "../entities/Player";
 import { Tiles } from "../flavours";
 import { getAStarPath } from "../pathfinding/astar";
 import GridLocation from "../pathfinding/GridLocation";
 import Cached from "../tools/Cached";
 import { eqRoundXY, eqXY, invalidXY, xy } from "../tools/xy";
-import Game from "../types/Game";
 import Option from "../types/Option";
 import XY from "../types/XY";
 
@@ -18,7 +19,10 @@ export default class PathManager {
   private path: Cached<Option<AStarPathResult>>;
   private position: XY<Tiles>;
 
-  constructor(private g: Game) {
+  constructor(
+    private player: Player,
+    private enemies: Set<EntityBase>,
+  ) {
     this.destination = xy(NaN, NaN);
     this.position = xy(NaN, NaN);
     this.enemyPositions = new Cached(this.generateEnemyPositions);
@@ -26,8 +30,8 @@ export default class PathManager {
   }
 
   getPlayerPath(destination: XY<Tiles>) {
-    if (!eqXY(this.position, this.g.player.positionRounded)) {
-      this.position = this.g.player.positionRounded;
+    if (!eqXY(this.position, this.player.positionRounded)) {
+      this.position = this.player.positionRounded;
       this.path.clear();
     }
 
@@ -40,7 +44,7 @@ export default class PathManager {
   }
 
   private generateEnemyPositions = () =>
-    new Set(Array.from(this.g.enemies, (e) => e.positionRounded));
+    new Set(Array.from(this.enemies, (e) => e.positionRounded));
 
   private generatePlayerPath = () => {
     const { enemyPositions, destination, position } = this;

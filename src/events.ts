@@ -8,7 +8,7 @@ import {
   Tiles,
 } from "./flavours";
 import Empty from "./types/Empty";
-import RenderFlags from "./types/RenderFlags";
+import DebugFlags from "./types/DebugFlags";
 import XY from "./types/XY";
 
 export class AnimationTriggerEvent extends CustomEvent<{
@@ -61,9 +61,9 @@ export class ProcessInputEvent extends CustomEvent<Empty> {
 
 export class RenderEvent extends CustomEvent<{
   ctx: CanvasRenderingContext2D;
-  flags: RenderFlags;
+  flags: DebugFlags;
 }> {
-  constructor(ctx: CanvasRenderingContext2D, flags: RenderFlags) {
+  constructor(ctx: CanvasRenderingContext2D, flags: DebugFlags) {
     super("Render", { detail: { ctx, flags } });
   }
 }

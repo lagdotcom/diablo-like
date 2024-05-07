@@ -1,9 +1,10 @@
 import { AnimationTriggerEvent, TickEvent } from "../events";
 import { AnimationID, AnimationTriggerID, Pixels } from "../flavours";
 import { Listener } from "../types/Dispatcher";
-import Game from "../types/Game";
+import GameEvents from "../types/GameEvents";
 import { SpriteSheet } from "../types/SpriteAnimation";
 import XY from "../types/XY";
+import ResourceManager from "./ResourceManager";
 
 export default class AnimationController {
   img!: HTMLImageElement;
@@ -12,7 +13,8 @@ export default class AnimationController {
   spriteDuration: number;
 
   constructor(
-    private g: Game,
+    private e: GameEvents,
+    private res: ResourceManager,
     private sheet: SpriteSheet,
     animation: AnimationID,
   ) {
@@ -21,8 +23,8 @@ export default class AnimationController {
     this.play(animation);
 
     // eslint-disable-next-line promise/catch-or-return
-    g.res.loadImage(sheet.url).then((img) => (this.img = img));
-    g.addEventListener("Tick", this.onTick, { passive: true });
+    res.loadImage(sheet.url).then((img) => (this.img = img));
+    e.addEventListener("Tick", this.onTick, { passive: true });
   }
 
   get offset(): XY<Pixels> {
@@ -31,7 +33,7 @@ export default class AnimationController {
   }
 
   private trigger(trigger: AnimationTriggerID) {
-    this.g.dispatchEvent(new AnimationTriggerEvent(this, trigger));
+    this.e.dispatchEvent(new AnimationTriggerEvent(this, trigger));
   }
 
   private loadFrame() {

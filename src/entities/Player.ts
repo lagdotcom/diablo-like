@@ -3,7 +3,9 @@ import {
   AttackRelease,
   RogueSpriteSheet,
 } from "../animations/Rogue";
+import FuseManager from "../components/FuseManager";
 import PlayerShot from "../components/PlayerShot";
+import ResourceManager from "../components/ResourceManager";
 import {
   AnimationTriggerEvent,
   JoypadButtonEvent,
@@ -17,7 +19,8 @@ import euclideanDistance from "../tools/euclideanDistance";
 import { tilesPerSecond } from "../tools/units";
 import { addXY, betweenXY, eqXY, vectorXY } from "../tools/xy";
 import { Listener } from "../types/Dispatcher";
-import Game from "../types/Game";
+import Drawable from "../types/Drawable";
+import GameEvents from "../types/GameEvents";
 import XY from "../types/XY";
 import EntityBase from "./EntityBase";
 
@@ -35,14 +38,19 @@ export default class Player extends EntityBase<"idle" | "move" | "fire"> {
   move?: PlayerMove;
 
   constructor(
-    g: Game,
+    e: GameEvents,
+    private fuse: FuseManager,
+    private render: Set<Drawable>,
+    res: ResourceManager,
     position: XY<Tiles>,
     heading: Radians = 0,
     public moveSpeed: TilesPerMillisecond = tilesPerSecond(6),
     public projectileVelocity: TilesPerMillisecond = tilesPerSecond(12),
   ) {
     super(
-      g,
+      e,
+      res,
+      render,
       RogueSpriteSheet,
       "idle",
       ["move", "fire"],
@@ -53,13 +61,13 @@ export default class Player extends EntityBase<"idle" | "move" | "fire"> {
     );
     this.attacking = false;
 
-    g.addEventListener("LeftMouse", this.onLeft, { passive: true });
-    g.addEventListener("RightMouse", this.onRight, { passive: true });
-    g.addEventListener("JoypadButton", this.onJoypadButton, { passive: true });
-    g.addEventListener("JoypadMove", this.onJoypadMove, { passive: true });
-    g.addEventListener("Tick", this.onTick, { passive: true });
+    e.addEventListener("LeftMouse", this.onLeft, { passive: true });
+    e.addEventListener("RightMouse", this.onRight, { passive: true });
+    e.addEventListener("JoypadButton", this.onJoypadButton, { passive: true });
+    e.addEventListener("JoypadMove", this.onJoypadMove, { passive: true });
+    e.addEventListener("Tick", this.onTick, { passive: true });
 
-    g.addEventListener("AnimationTrigger", this.onAnimationTrigger, {
+    e.addEventListener("AnimationTrigger", this.onAnimationTrigger, {
       passive: true,
     });
   }
@@ -145,7 +153,9 @@ export default class Player extends EntityBase<"idle" | "move" | "fire"> {
 
     if (attack)
       new PlayerShot(
-        this.g,
+        this.e,
+        this.fuse,
+        this.render,
         this.position,
         attack.type === "mouse"
           ? betweenXY(attack.target, position)

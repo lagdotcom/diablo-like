@@ -1,10 +1,12 @@
-import { CanvasResizeEvent, RenderEvent } from "../events";
+import CanvasResizer from "../components/CanvasResizer";
+import DebugManager from "../components/DebugManager";
+import EntityBase from "../entities/EntityBase";
+import { CanvasResizeEvent, RenderEvent, TickEvent } from "../events";
 import { Pixels, PixelsPerTile, Tiles } from "../flavours";
-import setFont from "../tools/setFont";
 import { addXY, printXY, roundXY, subXY, xy } from "../tools/xy";
 import { Listener } from "../types/Dispatcher";
 import Drawable from "../types/Drawable";
-import Game from "../types/Game";
+import GameEvents from "../types/GameEvents";
 import XY from "../types/XY";
 
 interface DrawInstruction {
@@ -12,19 +14,23 @@ interface DrawInstruction {
   offset: XY<Pixels>;
 }
 
-export default class IsometricCamera {
+export default class Camera {
   size!: XY<Pixels>;
   offset!: XY<Pixels>;
 
   constructor(
-    private g: Game,
-    private focusedObject = g.player,
+    e: GameEvents,
+    private debug: DebugManager,
+    private focusedObject: EntityBase,
+    private render: Set<Drawable>,
+    resizer: CanvasResizer,
     public tileSize: PixelsPerTile = 32,
   ) {
-    this.resize(g.size.width, g.size.height);
+    this.resize(resizer.width, resizer.height);
 
-    g.size.addEventListener("CanvasResize", this.onResize, { passive: true });
-    g.addEventListener("Render", this.onRender, { passive: true });
+    resizer.addEventListener("CanvasResize", this.onResize, { passive: true });
+    e.addEventListener("Tick", this.onTick, { passive: true });
+    e.addEventListener("Render", this.onRender, { passive: true });
   }
 
   private resize(width: Pixels, height: Pixels) {
@@ -39,7 +45,7 @@ export default class IsometricCamera {
   get renderList() {
     const list: DrawInstruction[] = [];
 
-    for (const object of this.g.render) {
+    for (const object of this.render) {
       const offset = this.worldToScreen(object.position);
 
       // TODO clip to camera
@@ -54,24 +60,20 @@ export default class IsometricCamera {
     this.resize(width, height);
   };
 
+  onTick: Listener<TickEvent> = () => {
+    const { debug, focus } = this;
+
+    if (debug.flags.camera) {
+      debug.add(`offset: ${printXY(this.offset)}`);
+      debug.add(`focus: ${printXY(focus)}`);
+    }
+  };
+
   onRender: Listener<RenderEvent> = ({ detail: { ctx, flags } }) => {
     const { renderList } = this;
 
     for (const { object, offset } of renderList)
-      object.draw(ctx, offset, flags);
-
-    if (flags.cameraDebug) {
-      const { g, focus } = this;
-
-      ctx.globalAlpha = 1;
-      setFont(ctx, "12px sans-serif", "white", "left", "top");
-
-      const x = g.size.width - 120;
-      let y = 100;
-      ctx.fillText(`offset: ${printXY(this.offset)}`, x, (y += 20));
-      ctx.fillText(`focus: ${printXY(focus)}`, x, (y += 20));
-      ctx.fillText(`mouse: ${printXY(g.mouse.position)}`, x, (y += 20));
-    }
+      object.draw(ctx, offset, flags, this);
   };
 
   screenToWorld(screen: XY<Pixels>): XY<Tiles> {

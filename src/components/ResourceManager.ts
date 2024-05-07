@@ -1,6 +1,6 @@
 import { LoadingEvent } from "../events";
 import { ResourceURL } from "../flavours";
-import Game from "../types/Game";
+import GameEvents from "../types/GameEvents";
 
 export default class ResourceManager {
   private promises: Map<ResourceURL, Promise<unknown>>;
@@ -8,7 +8,7 @@ export default class ResourceManager {
   private loaded: number;
   private loading: number;
 
-  constructor(private g: Game) {
+  constructor(private e: GameEvents) {
     this.promises = new Map();
     this.loaders = [];
     this.loaded = 0;
@@ -21,7 +21,7 @@ export default class ResourceManager {
   }
 
   private report() {
-    this.g.dispatchEvent(new LoadingEvent(this.loaded, this.loading));
+    this.e.dispatchEvent(new LoadingEvent(this.loaded, this.loading));
   }
 
   private start<T>(src: ResourceURL, promise: Promise<T>) {

@@ -1,16 +1,23 @@
+import CanvasResizer from "../components/CanvasResizer";
 import { RenderEvent } from "../events";
+import MouseHandler from "../inputs/MouseHandler";
 import makeTilePath from "../tools/makeTilePath";
 import { Listener } from "../types/Dispatcher";
-import Game from "../types/Game";
+import GameEvents from "../types/GameEvents";
+import Camera from "./Camera";
 
 export default class MapGrid {
-  constructor(private g: Game) {
-    g.addEventListener("Render", this.onRender, { passive: true });
+  constructor(
+    e: GameEvents,
+    private camera: Camera,
+    private mouse: MouseHandler,
+    private size: CanvasResizer,
+  ) {
+    e.addEventListener("Render", this.onRender, { passive: true });
   }
 
   onRender: Listener<RenderEvent> = ({ detail: { ctx } }) => {
-    const { g } = this;
-    const { camera, mouse, size } = g;
+    const { camera, mouse, size } = this;
     const { width: sw, height: sh } = size;
 
     const tl = camera.screenToWorld({ x: 0, y: 0 });

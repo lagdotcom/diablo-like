@@ -85,9 +85,8 @@
   }
 
   // src/components/CanvasResizer.ts
-  var CanvasResizer = class extends EventTarget {
+  var CanvasResizer = class {
     constructor(canvas) {
-      super();
       this.canvas = canvas;
       this.resize = () => {
         const { innerWidth: width, innerHeight: height } = window;
@@ -95,28 +94,60 @@
         this.canvas.height = height;
         this.canvas.style.width = `${width}px`;
         this.canvas.style.height = `${height}px`;
-        this.dispatchEvent(new CanvasResizeEvent(width, height));
+        this.width = width;
+        this.height = height;
+        this.xy = xy(width, height);
+        this.e.dispatchEvent(new CanvasResizeEvent(width, height));
       };
+      this.e = new EventTarget();
+      this.addEventListener = this.e.addEventListener.bind(this.e);
+      this.dispatchEvent = this.e.dispatchEvent.bind(this.e);
+      this.removeEventListener = this.e.removeEventListener.bind(this.e);
       window.addEventListener("resize", this.resize, { passive: true });
       this.resize();
-    }
-    get xy() {
-      return xy(this.width, this.height);
-    }
-    get width() {
-      return this.canvas.width;
-    }
-    get height() {
-      return this.canvas.height;
     }
     detach() {
       window.removeEventListener("resize", this.resize);
     }
   };
 
+  // src/tools/setFont.ts
+  function setFont(ctx, font, colour, alignX, alignY) {
+    ctx.font = font;
+    ctx.fillStyle = colour;
+    ctx.textAlign = alignX;
+    ctx.textBaseline = alignY;
+  }
+
+  // src/components/DebugManager.ts
+  var DebugManager = class {
+    constructor(e, size, flags) {
+      this.size = size;
+      this.flags = flags;
+      this.onRender = ({ detail: { ctx } }) => {
+        const x = this.size.width - 120;
+        let y = 100;
+        setFont(ctx, "12px sans-serif", "white", "left", "top");
+        for (const line of this.lines)
+          ctx.fillText(line, x, y += 20);
+      };
+      this.lines = [];
+      e.addEventListener("Render", this.onRender, { passive: true });
+    }
+    toggle(key) {
+      this.flags[key] = !this.flags[key];
+    }
+    add(line) {
+      this.lines.push(line);
+    }
+    reset() {
+      this.lines = [];
+    }
+  };
+
   // src/components/FuseManager.ts
   var FuseManager = class {
-    constructor(g) {
+    constructor(e) {
       this.onTick = ({ detail: { step } }) => {
         for (const fuse of this.fuses) {
           fuse.left -= step;
@@ -128,7 +159,7 @@
         }
       };
       this.fuses = /* @__PURE__ */ new Set();
-      g.addEventListener("Tick", this.onTick);
+      e.addEventListener("Tick", this.onTick);
     }
     add(time, callback) {
       const fuse = { left: time, callback, active: true };
@@ -325,9 +356,10 @@
 
   // src/components/PathManager.ts
   var PathManager = class {
-    constructor(g) {
-      this.g = g;
-      this.generateEnemyPositions = () => new Set(Array.from(this.g.enemies, (e) => e.positionRounded));
+    constructor(player, enemies) {
+      this.player = player;
+      this.enemies = enemies;
+      this.generateEnemyPositions = () => new Set(Array.from(this.enemies, (e) => e.positionRounded));
       this.generatePlayerPath = () => {
         const { enemyPositions, destination, position } = this;
         if (invalidXY(destination) || invalidXY(position))
@@ -340,8 +372,8 @@
       this.path = new Cached(this.generatePlayerPath);
     }
     getPlayerPath(destination) {
-      if (!eqXY(this.position, this.g.player.positionRounded)) {
-        this.position = this.g.player.positionRounded;
+      if (!eqXY(this.position, this.player.positionRounded)) {
+        this.position = this.player.positionRounded;
         this.path.clear();
       }
       if (!eqRoundXY(this.destination, destination)) {
@@ -354,8 +386,8 @@
 
   // src/components/ResourceManager.ts
   var ResourceManager = class {
-    constructor(g) {
-      this.g = g;
+    constructor(e) {
+      this.e = e;
       this.promises = /* @__PURE__ */ new Map();
       this.loaders = [];
       this.loaded = 0;
@@ -366,7 +398,7 @@
         return `Loading: ${this.loaded} / ${this.loading}`;
     }
     report() {
-      this.g.dispatchEvent(new LoadingEvent(this.loaded, this.loading));
+      this.e.dispatchEvent(new LoadingEvent(this.loaded, this.loading));
     }
     start(src, promise) {
       this.loading++;
@@ -454,8 +486,9 @@
 
   // src/components/AnimationController.ts
   var AnimationController = class {
-    constructor(g, sheet, animation) {
-      this.g = g;
+    constructor(e, res, sheet, animation) {
+      this.e = e;
+      this.res = res;
       this.sheet = sheet;
       this.onTick = ({ detail: { step } }) => {
         this.spriteDuration -= step;
@@ -465,8 +498,8 @@
       this.currentFrameIndex = 0;
       this.spriteDuration = 0;
       this.play(animation);
-      g.res.loadImage(sheet.url).then((img) => this.img = img);
-      g.addEventListener("Tick", this.onTick, { passive: true });
+      res.loadImage(sheet.url).then((img) => this.img = img);
+      e.addEventListener("Tick", this.onTick, { passive: true });
     }
     get offset() {
       var _a;
@@ -474,7 +507,7 @@
       return (_a = a.offset) != null ? _a : this.sheet.globalOffset;
     }
     trigger(trigger) {
-      this.g.dispatchEvent(new AnimationTriggerEvent(this, trigger));
+      this.e.dispatchEvent(new AnimationTriggerEvent(this, trigger));
     }
     loadFrame() {
       const f = this.sheet.animations[this.currentAnimation].frames[this.currentFrameIndex];
@@ -556,16 +589,21 @@
 
   // src/entities/EntityBase.ts
   var EntityBase = class {
-    constructor(g, spriteSheet, startAnimation, resetAnimations, position, radius, height, heading = 0) {
-      this.g = g;
+    constructor(e, res, render, spriteSheet, startAnimation, resetAnimations, position, radius, height, heading = 0) {
+      this.e = e;
       this.position = position;
       this.radius = radius;
       this.height = height;
       this.heading = heading;
       this.prefix = startAnimation;
-      this.anim = new AnimationController(g, spriteSheet, `${startAnimation}2`);
+      this.anim = new AnimationController(
+        e,
+        res,
+        spriteSheet,
+        `${startAnimation}2`
+      );
       this.resetPrefixes = new Set(resetAnimations);
-      g.render.add(this);
+      render.add(this);
     }
     get positionRounded() {
       return roundXY(this.position);
@@ -580,23 +618,35 @@
       this.prefix = prefix;
     }
     draw(ctx, o, fl) {
-      this.anim.draw(ctx, o, fl.imageOutline);
+      this.anim.draw(ctx, o, fl.outline);
     }
   };
 
   // src/entities/Fallen.ts
   var Fallen = class extends EntityBase {
-    constructor(g, position = xy(0, 0), heading = 0, attackRange = 1) {
-      super(g, FallenSpriteSheet, "idle", ["move"], position, 1, 1, heading);
+    constructor(e, player, render, res, position = xy(0, 0), heading = 0, attackRange = 1) {
+      super(
+        e,
+        res,
+        render,
+        FallenSpriteSheet,
+        "idle",
+        ["move"],
+        position,
+        1,
+        1,
+        heading
+      );
+      this.player = player;
       this.attackRange = attackRange;
       this.onTick = () => {
-        const player = this.g.player;
-        this.heading = betweenXY(player.position, this.position);
-        const distance = euclideanDistance(player.position, this.position);
-        const moving = distance > player.radius + this.radius + this.attackRange;
+        const { position, player, radius, attackRange } = this;
+        this.heading = betweenXY(player.position, position);
+        const distance = euclideanDistance(player.position, position);
+        const moving = distance > player.radius + radius + attackRange;
         this.animate(moving ? "move" : "idle");
       };
-      g.addEventListener("Tick", this.onTick, { passive: true });
+      e.addEventListener("Tick", this.onTick, { passive: true });
     }
   };
 
@@ -656,26 +706,27 @@
 
   // src/components/PlayerShot.ts
   var PlayerShot = class {
-    constructor(g, position, angle, velocity, radius, timeToLive) {
-      this.g = g;
+    constructor(e, fuse, render, position, angle, velocity, radius, timeToLive) {
+      this.e = e;
+      this.render = render;
       this.position = position;
       this.angle = angle;
       this.velocity = velocity;
       this.radius = radius;
       this.onRemove = () => {
-        this.g.render.delete(this);
-        this.g.removeEventListener("Tick", this.onTick);
+        this.render.delete(this);
+        this.e.removeEventListener("Tick", this.onTick);
       };
       this.onTick = ({ detail: { step } }) => {
         const move = this.velocity * step;
         this.position = addXY(this.position, vectorXY(this.angle, move));
       };
-      g.render.add(this);
-      this.removeTimer = g.fuse.add(timeToLive, this.onRemove);
-      g.addEventListener("Tick", this.onTick, { passive: true });
+      render.add(this);
+      this.removeTimer = fuse.add(timeToLive, this.onRemove);
+      e.addEventListener("Tick", this.onTick, { passive: true });
     }
-    draw(ctx) {
-      const path = makeTilePath(this.g.camera, this.position);
+    draw(ctx, offset, flags, camera) {
+      const path = makeTilePath(camera, this.position);
       ctx.globalAlpha = 0.4;
       ctx.fillStyle = "red";
       ctx.fill(path);
@@ -691,9 +742,11 @@
 
   // src/entities/Player.ts
   var Player = class extends EntityBase {
-    constructor(g, position, heading = 0, moveSpeed = tilesPerSecond(6), projectileVelocity = tilesPerSecond(12)) {
+    constructor(e, fuse, render, res, position, heading = 0, moveSpeed = tilesPerSecond(6), projectileVelocity = tilesPerSecond(12)) {
       super(
-        g,
+        e,
+        res,
+        render,
         RogueSpriteSheet,
         "idle",
         ["move", "fire"],
@@ -702,6 +755,8 @@
         1,
         heading
       );
+      this.fuse = fuse;
+      this.render = render;
       this.moveSpeed = moveSpeed;
       this.projectileVelocity = projectileVelocity;
       this.onLeft = ({ detail }) => {
@@ -759,12 +814,12 @@
           }
       };
       this.attacking = false;
-      g.addEventListener("LeftMouse", this.onLeft, { passive: true });
-      g.addEventListener("RightMouse", this.onRight, { passive: true });
-      g.addEventListener("JoypadButton", this.onJoypadButton, { passive: true });
-      g.addEventListener("JoypadMove", this.onJoypadMove, { passive: true });
-      g.addEventListener("Tick", this.onTick, { passive: true });
-      g.addEventListener("AnimationTrigger", this.onAnimationTrigger, {
+      e.addEventListener("LeftMouse", this.onLeft, { passive: true });
+      e.addEventListener("RightMouse", this.onRight, { passive: true });
+      e.addEventListener("JoypadButton", this.onJoypadButton, { passive: true });
+      e.addEventListener("JoypadMove", this.onJoypadMove, { passive: true });
+      e.addEventListener("Tick", this.onTick, { passive: true });
+      e.addEventListener("AnimationTrigger", this.onAnimationTrigger, {
         passive: true
       });
     }
@@ -775,7 +830,9 @@
       const { attack, position } = this;
       if (attack)
         new PlayerShot(
-          this.g,
+          this.e,
+          this.fuse,
+          this.render,
           this.position,
           attack.type === "mouse" ? betweenXY(attack.target, position) : attack.angle,
           this.projectileVelocity,
@@ -790,61 +847,63 @@
     }
   };
 
-  // src/tools/setFont.ts
-  function setFont(ctx, font, colour, alignX, alignY) {
-    ctx.font = font;
-    ctx.fillStyle = colour;
-    ctx.textAlign = alignX;
-    ctx.textBaseline = alignY;
-  }
-
   // src/inputs/DebugKeyHandler.ts
+  var DebugFlagKeys = {
+    c: "camera",
+    f: "fps",
+    m: "mouse",
+    o: "outline",
+    p: "path"
+  };
   var DebugKeyHandler = class {
-    constructor(g) {
-      this.g = g;
+    constructor(e, camera, debug, mouse, path, size) {
+      this.camera = camera;
+      this.debug = debug;
+      this.mouse = mouse;
+      this.path = path;
+      this.size = size;
       this.onKeyPress = ({ key }) => {
-        const { g } = this;
-        if (key === "c")
-          g.renderFlags.cameraDebug = !g.renderFlags.cameraDebug;
-        if (key === "f")
-          g.renderFlags.showFPS = !g.renderFlags.showFPS;
-        if (key === "o")
-          g.renderFlags.imageOutline = !g.renderFlags.imageOutline;
-        if (key === "p")
-          g.renderFlags.pathDebug = !g.renderFlags.pathDebug;
+        const { debug } = this;
+        const flag = DebugFlagKeys[key];
+        if (flag)
+          debug.toggle(flag);
       };
       this.onRender = ({ detail: { ctx, flags } }) => {
-        const { g } = this;
+        const { camera, mouse, path, size } = this;
         ctx.globalAlpha = 1;
         setFont(ctx, "16px sans-serif", "white", "left", "bottom");
-        ctx.fillText("[C]amera, [F]PS, [O]utline, [P]ath", 8, g.size.height - 8);
-        if (flags.pathDebug) {
-          const path = g.path.getPlayerPath(g.mouse.position);
-          if (!path)
+        ctx.fillText(
+          "[C]amera, [F]PS, [M]ouse, [O]utline, [P]ath",
+          8,
+          size.height - 8
+        );
+        if (flags.path) {
+          const result = path.getPlayerPath(mouse.position);
+          if (!result)
             return;
           ctx.globalAlpha = 0.1;
           ctx.fillStyle = "white";
-          for (const t of path.tiles) {
-            const x = makeTilePath(g.camera, t);
+          for (const t of result.tiles) {
+            const x = makeTilePath(camera, t);
             ctx.fill(x);
           }
           ctx.globalAlpha = 0.3;
           setFont(ctx, "8px sans-serif", "white", "center", "middle");
-          for (const [pos, amount] of path.costSoFar) {
-            const screen = g.camera.worldToScreen(pos);
+          for (const [pos, amount] of result.costSoFar) {
+            const screen = camera.worldToScreen(pos);
             ctx.fillText(amount.toFixed(1), screen.x, screen.y);
           }
         }
       };
       window.addEventListener("keypress", this.onKeyPress, { passive: true });
-      g.addEventListener("Render", this.onRender, { passive: true });
+      e.addEventListener("Render", this.onRender, { passive: true });
     }
   };
 
   // src/inputs/JoypadHandler.ts
   var JoypadHandler = class {
-    constructor(g, axisThreshold = 0.1) {
-      this.g = g;
+    constructor(e, axisThreshold = 0.1) {
+      this.e = e;
       this.axisThreshold = axisThreshold;
       this.onConnect = (e) => {
         this.connect(e.gamepad.index);
@@ -858,85 +917,96 @@
         const distanceSquared = x ** 2 + y ** 2;
         if (distanceSquared > this.axisThreshold) {
           const angle = Math.atan2(y, x);
-          this.g.dispatchEvent(new JoypadMoveEvent(angle));
+          this.e.dispatchEvent(new JoypadMoveEvent(angle));
         }
         for (let i = 0; i < pad.buttons.length; i++) {
           if (pad.buttons[i].pressed)
-            this.g.dispatchEvent(new JoypadButtonEvent(i));
+            this.e.dispatchEvent(new JoypadButtonEvent(i));
         }
       };
       this.gamepad = NaN;
-      window.addEventListener("gamepadconnected", this.onConnect);
+      window.addEventListener("gamepadconnected", this.onConnect, {
+        passive: true
+      });
     }
     connect(index) {
       this.gamepad = index;
-      this.g.addEventListener("ProcessInput", this.onProcessInput);
+      this.e.addEventListener("ProcessInput", this.onProcessInput, {
+        passive: true
+      });
     }
     disconnect() {
       this.gamepad = NaN;
-      this.g.removeEventListener("ProcessInput", this.onProcessInput);
+      this.e.removeEventListener("ProcessInput", this.onProcessInput);
     }
   };
 
   // src/inputs/MouseHandler.ts
   var MouseHandler = class {
-    constructor(g) {
-      this.g = g;
+    constructor(e, camera, container, debug) {
+      this.e = e;
+      this.camera = camera;
+      this.debug = debug;
       this.onUpdate = (e) => {
         this.left = !!(e.buttons & 1);
         this.right = !!(e.buttons & 2);
-        this.position = this.g.camera.screenToWorld({ x: e.x, y: e.y });
+        this.screen = xy(e.x, e.y);
       };
       this.onReset = () => {
         this.left = false;
         this.right = false;
-        this.position = xy(NaN, NaN);
+        this.screen = xy(NaN, NaN);
       };
       this.onProcessInput = () => {
-        if (this.left)
-          this.g.dispatchEvent(new LeftMouseEvent(this.position));
-        if (this.right)
-          this.g.dispatchEvent(new RightMouseEvent(this.position));
+        const { e, position, left, right, debug } = this;
+        if (left)
+          e.dispatchEvent(new LeftMouseEvent(position));
+        if (right)
+          e.dispatchEvent(new RightMouseEvent(position));
+        if (debug.flags.mouse)
+          debug.add(`mouse: ${printXY(position)}`);
       };
       this.left = false;
       this.right = false;
-      this.position = xy(NaN, NaN);
-      g.canvas.addEventListener("pointerdown", this.onUpdate, { passive: true });
-      g.canvas.addEventListener("pointerup", this.onUpdate, { passive: true });
-      g.canvas.addEventListener("pointermove", this.onUpdate, { passive: true });
-      g.canvas.addEventListener("pointerout", this.onReset, { passive: true });
-      g.canvas.addEventListener("contextmenu", (e) => e.preventDefault());
-      g.addEventListener("ProcessInput", this.onProcessInput, { passive: true });
+      this.screen = xy(NaN, NaN);
+      container.addEventListener("pointerdown", this.onUpdate, { passive: true });
+      container.addEventListener("pointerup", this.onUpdate, { passive: true });
+      container.addEventListener("pointermove", this.onUpdate, { passive: true });
+      container.addEventListener("pointerout", this.onReset, { passive: true });
+      container.addEventListener("contextmenu", (e2) => e2.preventDefault());
+      e.addEventListener("ProcessInput", this.onProcessInput, { passive: true });
+    }
+    get position() {
+      return this.camera.screenToWorld(this.screen);
     }
   };
 
   // src/visuals/Camera.ts
-  var IsometricCamera = class {
-    constructor(g, focusedObject = g.player, tileSize = 32) {
-      this.g = g;
+  var Camera = class {
+    constructor(e, debug, focusedObject, render, resizer, tileSize = 32) {
+      this.debug = debug;
       this.focusedObject = focusedObject;
+      this.render = render;
       this.tileSize = tileSize;
       this.onResize = ({ detail: { width, height } }) => {
         this.resize(width, height);
       };
+      this.onTick = () => {
+        const { debug, focus } = this;
+        if (debug.flags.camera) {
+          debug.add(`offset: ${printXY(this.offset)}`);
+          debug.add(`focus: ${printXY(focus)}`);
+        }
+      };
       this.onRender = ({ detail: { ctx, flags } }) => {
         const { renderList } = this;
         for (const { object, offset } of renderList)
-          object.draw(ctx, offset, flags);
-        if (flags.cameraDebug) {
-          const { g, focus } = this;
-          ctx.globalAlpha = 1;
-          setFont(ctx, "12px sans-serif", "white", "left", "top");
-          const x = g.size.width - 120;
-          let y = 100;
-          ctx.fillText(`offset: ${printXY(this.offset)}`, x, y += 20);
-          ctx.fillText(`focus: ${printXY(focus)}`, x, y += 20);
-          ctx.fillText(`mouse: ${printXY(g.mouse.position)}`, x, y += 20);
-        }
+          object.draw(ctx, offset, flags, this);
       };
-      this.resize(g.size.width, g.size.height);
-      g.size.addEventListener("CanvasResize", this.onResize, { passive: true });
-      g.addEventListener("Render", this.onRender, { passive: true });
+      this.resize(resizer.width, resizer.height);
+      resizer.addEventListener("CanvasResize", this.onResize, { passive: true });
+      e.addEventListener("Tick", this.onTick, { passive: true });
+      e.addEventListener("Render", this.onRender, { passive: true });
     }
     resize(width, height) {
       this.size = xy(width, height);
@@ -947,7 +1017,7 @@
     }
     get renderList() {
       const list = [];
-      for (const object of this.g.render) {
+      for (const object of this.render) {
         const offset = this.worldToScreen(object.position);
         list.push({ object, offset });
       }
@@ -969,7 +1039,7 @@
 
   // src/visuals/FPSCounter.ts
   var FPSCounter = class {
-    constructor(g, samples = 10) {
+    constructor(e, size, samples = 10) {
       this.samples = samples;
       this.onResize = ({ detail: { width, height } }) => {
         this.x = width - 8;
@@ -981,18 +1051,18 @@
           this.steps.shift();
       };
       this.onRender = ({ detail: { ctx, flags } }) => {
-        if (!flags.showFPS)
+        if (!flags.fps)
           return;
         const { fps, x, y } = this;
         setFont(ctx, "24px sans-serif", "yellow", "end", "bottom");
         ctx.fillText(Math.round(fps).toString(), x, y);
       };
       this.steps = [];
-      this.x = g.size.width - 8;
-      this.y = g.size.height - 8;
-      g.size.addEventListener("CanvasResize", this.onResize, { passive: true });
-      g.addEventListener("Tick", this.onTick, { passive: true });
-      g.addEventListener("Render", this.onRender, { passive: true });
+      this.x = size.width - 8;
+      this.y = size.height - 8;
+      size.addEventListener("CanvasResize", this.onResize, { passive: true });
+      e.addEventListener("Tick", this.onTick, { passive: true });
+      e.addEventListener("Render", this.onRender, { passive: true });
     }
     get fps() {
       if (this.steps.length === 0)
@@ -1003,11 +1073,12 @@
 
   // src/visuals/MapGrid.ts
   var MapGrid = class {
-    constructor(g) {
-      this.g = g;
+    constructor(e, camera, mouse, size) {
+      this.camera = camera;
+      this.mouse = mouse;
+      this.size = size;
       this.onRender = ({ detail: { ctx } }) => {
-        const { g } = this;
-        const { camera, mouse, size } = g;
+        const { camera, mouse, size } = this;
         const { width: sw, height: sh } = size;
         const tl = camera.screenToWorld({ x: 0, y: 0 });
         const tr = camera.screenToWorld({ x: sw, y: 0 });
@@ -1040,18 +1111,17 @@
         ctx.fill(path);
         ctx.globalAlpha = 1;
       };
-      g.addEventListener("Render", this.onRender, { passive: true });
+      e.addEventListener("Render", this.onRender, { passive: true });
     }
   };
 
   // src/Engine.ts
-  var Engine = class extends EventTarget {
+  var Engine = class {
     constructor(canvas, ctx) {
-      super();
       this.canvas = canvas;
       this.ctx = ctx;
       this.tick = (step) => {
-        const { ctx, res, size } = this;
+        const { e, debug, ctx, res, size } = this;
         ctx.save();
         ctx.clearRect(0, 0, size.width, size.height);
         const loadingText = res.loadingText;
@@ -1060,33 +1130,55 @@
           ctx.fillText(loadingText, size.width / 2, size.height / 2);
           return;
         }
-        this.dispatchEvent(new ProcessInputEvent());
-        this.dispatchEvent(new TickEvent(step));
-        this.dispatchEvent(new RenderEvent(ctx, this.renderFlags));
+        debug.reset();
+        e.dispatchEvent(new ProcessInputEvent());
+        e.dispatchEvent(new TickEvent(step));
+        e.dispatchEvent(new RenderEvent(ctx, debug.flags));
         ctx.restore();
       };
+      this.e = new EventTarget();
       this.render = /* @__PURE__ */ new Set();
-      this.renderFlags = {
-        cameraDebug: false,
-        imageOutline: false,
-        pathDebug: true,
-        showFPS: true
-      };
-      this.res = new ResourceManager(this);
+      this.res = new ResourceManager(this.e);
       this.size = new CanvasResizer(canvas);
-      this.path = new PathManager(this);
-      this.fpsCounter = new FPSCounter(this);
-      this.fuse = new FuseManager(this);
-      this.player = new Player(this, xy(0, 0));
-      this.mapGrid = new MapGrid(this);
-      this.camera = new IsometricCamera(this);
-      this.mouse = new MouseHandler(this);
-      this.joypad = new JoypadHandler(this);
+      this.debug = new DebugManager(this.e, this.size, {
+        camera: false,
+        mouse: false,
+        outline: false,
+        path: true,
+        fps: true
+      });
+      this.fpsCounter = new FPSCounter(this.e, this.size);
+      this.fuse = new FuseManager(this.e);
+      this.player = new Player(
+        this.e,
+        this.fuse,
+        this.render,
+        this.res,
+        xy(0, 0)
+      );
+      this.camera = new Camera(
+        this.e,
+        this.debug,
+        this.player,
+        this.render,
+        this.size
+      );
+      this.mouse = new MouseHandler(this.e, this.camera, this.canvas, this.debug);
+      this.mapGrid = new MapGrid(this.e, this.camera, this.mouse, this.size);
+      this.joypad = new JoypadHandler(this.e);
       this.enemies = /* @__PURE__ */ new Set([
-        new Fallen(this, xy(10, 0)),
-        new Fallen(this, xy(0, -10))
+        new Fallen(this.e, this.player, this.render, this.res, xy(10, 0)),
+        new Fallen(this.e, this.player, this.render, this.res, xy(0, -10))
       ]);
-      new DebugKeyHandler(this);
+      this.path = new PathManager(this.player, this.enemies);
+      new DebugKeyHandler(
+        this.e,
+        this.camera,
+        this.debug,
+        this.mouse,
+        this.path,
+        this.size
+      );
       this.clock = new GameClock(this.tick, 50);
     }
   };

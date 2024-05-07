@@ -1,12 +1,9 @@
 import { Tiles } from "../flavours";
 import XY from "../types/XY";
-import IsometricCamera from "../visuals/Camera";
+import Camera from "../visuals/Camera";
 import { addXY } from "./xy";
 
-export default function makeTilePath(
-  proj: IsometricCamera,
-  position: XY<Tiles>,
-) {
+export default function makeTilePath(proj: Camera, position: XY<Tiles>) {
   const a = proj.worldToScreen(addXY(position, { x: -0.5, y: -0.5 }));
   const b = proj.worldToScreen(addXY(position, { x: 0.5, y: -0.5 }));
   const c = proj.worldToScreen(addXY(position, { x: 0.5, y: 0.5 }));

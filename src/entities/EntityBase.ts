@@ -1,10 +1,11 @@
 import AnimationController from "../components/AnimationController";
+import ResourceManager from "../components/ResourceManager";
 import { Pixels, Radians, Tiles } from "../flavours";
 import getOctant from "../tools/getOctant";
 import { roundXY } from "../tools/xy";
 import Drawable from "../types/Drawable";
-import Game from "../types/Game";
-import RenderFlags from "../types/RenderFlags";
+import GameEvents from "../types/GameEvents";
+import DebugFlags from "../types/DebugFlags";
 import { SpriteSheet } from "../types/SpriteAnimation";
 import XY from "../types/XY";
 
@@ -15,7 +16,9 @@ export default class EntityBase<TPrefix = unknown> implements Drawable {
   resetPrefixes: Set<TPrefix>;
 
   constructor(
-    protected g: Game,
+    protected e: GameEvents,
+    res: ResourceManager,
+    render: Set<Drawable>,
     spriteSheet: SpriteSheet,
     startAnimation: TPrefix,
     resetAnimations: TPrefix[],
@@ -25,10 +28,15 @@ export default class EntityBase<TPrefix = unknown> implements Drawable {
     public heading: Radians = 0,
   ) {
     this.prefix = startAnimation;
-    this.anim = new AnimationController(g, spriteSheet, `${startAnimation}2`);
+    this.anim = new AnimationController(
+      e,
+      res,
+      spriteSheet,
+      `${startAnimation}2`,
+    );
     this.resetPrefixes = new Set(resetAnimations);
 
-    g.render.add(this);
+    render.add(this);
   }
 
   get positionRounded() {
@@ -49,7 +57,7 @@ export default class EntityBase<TPrefix = unknown> implements Drawable {
     this.prefix = prefix;
   }
 
-  draw(ctx: CanvasRenderingContext2D, o: XY<Pixels>, fl: RenderFlags) {
-    this.anim.draw(ctx, o, fl.imageOutline);
+  draw(ctx: CanvasRenderingContext2D, o: XY<Pixels>, fl: DebugFlags) {
+    this.anim.draw(ctx, o, fl.outline);
   }
 }

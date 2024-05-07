@@ -1,8 +1,9 @@
+import CanvasResizer from "../components/CanvasResizer";
 import { CanvasResizeEvent, RenderEvent, TickEvent } from "../events";
 import { Milliseconds, Pixels } from "../flavours";
 import setFont from "../tools/setFont";
 import { Listener } from "../types/Dispatcher";
-import Game from "../types/Game";
+import GameEvents from "../types/GameEvents";
 
 export default class FPSCounter {
   steps: Milliseconds[];
@@ -10,16 +11,17 @@ export default class FPSCounter {
   y: Pixels;
 
   constructor(
-    g: Game,
+    e: GameEvents,
+    size: CanvasResizer,
     public samples = 10,
   ) {
     this.steps = [];
-    this.x = g.size.width - 8;
-    this.y = g.size.height - 8;
+    this.x = size.width - 8;
+    this.y = size.height - 8;
 
-    g.size.addEventListener("CanvasResize", this.onResize, { passive: true });
-    g.addEventListener("Tick", this.onTick, { passive: true });
-    g.addEventListener("Render", this.onRender, { passive: true });
+    size.addEventListener("CanvasResize", this.onResize, { passive: true });
+    e.addEventListener("Tick", this.onTick, { passive: true });
+    e.addEventListener("Render", this.onRender, { passive: true });
   }
 
   get fps() {
@@ -38,7 +40,7 @@ export default class FPSCounter {
   };
 
   onRender: Listener<RenderEvent> = ({ detail: { ctx, flags } }) => {
-    if (!flags.showFPS) return;
+    if (!flags.fps) return;
 
     const { fps, x, y } = this;
     setFont(ctx, "24px sans-serif", "yellow", "end", "bottom");
