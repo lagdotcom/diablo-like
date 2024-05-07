@@ -1,5 +1,6 @@
 import FuseManager from "../components/FuseManager";
 import GameClock from "../components/GameClock";
+import PathManager from "../components/PathManager";
 import ResourceManager from "../components/ResourceManager";
 import EntityBase from "../entities/EntityBase";
 import Player from "../entities/Player";
@@ -47,6 +48,7 @@ export default interface Game
   joypad: JoypadHandler;
   mapGrid: MapGrid;
   mouse: MouseHandler;
+  path: PathManager;
   player: Player;
   render: Set<Drawable>;
   renderFlags: RenderFlags;

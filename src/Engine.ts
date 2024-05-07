@@ -1,6 +1,7 @@
 import CanvasResizer from "./components/CanvasResizer";
 import FuseManager from "./components/FuseManager";
 import GameClock, { TickFunction } from "./components/GameClock";
+import PathManager from "./components/PathManager";
 import ResourceManager from "./components/ResourceManager";
 import EntityBase from "./entities/EntityBase";
 import Fallen from "./entities/Fallen";
@@ -27,6 +28,7 @@ export default class Engine extends EventTarget implements Game {
   joypad: JoypadHandler;
   mapGrid: MapGrid;
   mouse: MouseHandler;
+  path: PathManager;
   player: Player;
   res: ResourceManager;
   size: CanvasResizer;
@@ -47,6 +49,7 @@ export default class Engine extends EventTarget implements Game {
     };
     this.res = new ResourceManager(this);
     this.size = new CanvasResizer(canvas);
+    this.path = new PathManager(this);
 
     this.fpsCounter = new FPSCounter(this);
     this.fuse = new FuseManager(this);

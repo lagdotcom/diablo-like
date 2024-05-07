@@ -1,4 +1,3 @@
-import EntityBase from "../entities/EntityBase";
 import { Tiles } from "../flavours";
 import euclideanDistance from "../tools/euclideanDistance";
 import isDefined from "../tools/isDefined";
@@ -54,23 +53,23 @@ function aStarSearch(
 }
 
 export function getAStarPath(
-  enemies: Set<EntityBase>,
+  blocked: Set<XY<Tiles>>,
   from: XY<Tiles>,
   to: XY<Tiles>,
 ) {
-  const graph = new WeightedGraph(enemies);
+  const graph = new WeightedGraph(blocked);
   const start = graph.at(from.x, from.y);
   const goal = graph.at(to.x, to.y);
   const max: Tiles = euclideanDistance(from, to) + 10;
 
   const { cameFrom, costSoFar } = aStarSearch(graph, start, goal, max);
 
-  const path: XY<Tiles>[] = [];
+  const tiles: XY<Tiles>[] = [];
   let current: GridLocation | undefined = goal;
   while (current) {
-    path.push(current);
+    tiles.push(current);
     current = cameFrom.get(current);
   }
 
-  return { path, costSoFar };
+  return { tiles, costSoFar };
 }

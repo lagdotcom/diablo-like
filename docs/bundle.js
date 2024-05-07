@@ -72,6 +72,9 @@
   function roundXY({ x, y }) {
     return { x: Math.round(x), y: Math.round(y) };
   }
+  function eqRoundXY(a, b) {
+    return eqXY(roundXY(a), roundXY(b));
+  }
   function invalidXY({ x, y }) {
     return isNaN(x) || isNaN(y);
   }
@@ -162,6 +165,190 @@
     stop() {
       if (typeof this.request === "number")
         cancelAnimationFrame(this.request);
+    }
+  };
+
+  // src/tools/euclideanDistance.ts
+  function euclideanDistance(a, b) {
+    return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
+  }
+
+  // src/tools/isDefined.ts
+  function isDefined(object) {
+    return typeof object !== "undefined";
+  }
+
+  // src/pathfinding/PriorityQueue.ts
+  var PriorityQueue = class {
+    constructor() {
+      this.list = [];
+      this.dirty = false;
+    }
+    put(location, priority) {
+      this.list.push({ location, priority });
+      this.dirty = true;
+    }
+    sort() {
+      this.list.sort((a, b) => a.priority - b.priority);
+      this.dirty = false;
+    }
+    get() {
+      if (this.dirty)
+        this.sort();
+      const item = this.list.shift();
+      if (!item)
+        throw new Error("queue is empty");
+      return item.location;
+    }
+    empty() {
+      return this.list.length === 0;
+    }
+  };
+
+  // src/pathfinding/GridLocation.ts
+  var GridLocation = class {
+    constructor(x, y) {
+      this.x = x;
+      this.y = y;
+    }
+  };
+
+  // src/pathfinding/WeightedGraph.ts
+  var ROOT2 = Math.sqrt(2);
+  var WeightedGraph = class {
+    constructor(blocked) {
+      this.locations = /* @__PURE__ */ new Map();
+      this.blocked = new Set(Array.from(blocked, (e) => this.at(e.x, e.y)));
+    }
+    isNavigable(pos) {
+      return !this.blocked.has(pos);
+    }
+    at(x, y) {
+      const tag = `${x},${y}`;
+      const old = this.locations.get(tag);
+      if (old)
+        return old;
+      const loc = new GridLocation(x, y);
+      this.locations.set(tag, loc);
+      return loc;
+    }
+    *neighbours(loc) {
+      for (let y = -1; y <= 1; y++)
+        for (let x = -1; x <= 1; x++) {
+          if (x || y) {
+            const pos = this.at(loc.x + x, loc.y + y);
+            if (this.isNavigable(pos))
+              yield pos;
+          }
+        }
+    }
+    cost(a, b) {
+      const ex = a.x !== b.x;
+      const ey = a.y !== b.y;
+      if (ex && ey)
+        return ROOT2;
+      return 1;
+    }
+  };
+
+  // src/pathfinding/astar.ts
+  var CrashMap = class extends Map {
+    getOrDie(key) {
+      const value = super.get(key);
+      if (typeof value === "undefined")
+        throw new Error(`No such key: ${key}`);
+      return value;
+    }
+  };
+  function heuristic(a, b) {
+    return euclideanDistance(a, b);
+  }
+  function aStarSearch(graph, start, goal, max) {
+    const frontier = new PriorityQueue();
+    frontier.put(start, 0);
+    const cameFrom = /* @__PURE__ */ new Map();
+    const costSoFar = new CrashMap([[start, 0]]);
+    while (!frontier.empty()) {
+      const current = frontier.get();
+      if (current == goal)
+        break;
+      for (const next of graph.neighbours(current)) {
+        const newCost = costSoFar.getOrDie(current) + graph.cost(current, next);
+        if (newCost > max)
+          continue;
+        const nextCost = costSoFar.get(next);
+        if (!isDefined(nextCost) || newCost < nextCost) {
+          costSoFar.set(next, newCost);
+          const priority = newCost + heuristic(next, goal);
+          frontier.put(next, priority);
+          cameFrom.set(next, current);
+        }
+      }
+    }
+    return { cameFrom, costSoFar };
+  }
+  function getAStarPath(blocked, from, to) {
+    const graph = new WeightedGraph(blocked);
+    const start = graph.at(from.x, from.y);
+    const goal = graph.at(to.x, to.y);
+    const max = euclideanDistance(from, to) + 10;
+    const { cameFrom, costSoFar } = aStarSearch(graph, start, goal, max);
+    const tiles = [];
+    let current = goal;
+    while (current) {
+      tiles.push(current);
+      current = cameFrom.get(current);
+    }
+    return { tiles, costSoFar };
+  }
+
+  // src/tools/Cached.ts
+  var Cached = class {
+    constructor(generator) {
+      this.generator = generator;
+    }
+    get isComputed() {
+      return isDefined(this.computed);
+    }
+    get() {
+      const { computed, generator } = this;
+      if (isDefined(computed))
+        return computed;
+      const value = generator();
+      this.computed = value;
+      return value;
+    }
+    clear() {
+      this.computed = void 0;
+    }
+  };
+
+  // src/components/PathManager.ts
+  var PathManager = class {
+    constructor(g) {
+      this.g = g;
+      this.generateEnemyPositions = () => new Set(Array.from(this.g.enemies, (e) => e.positionRounded));
+      this.generatePlayerPath = () => {
+        const { enemyPositions, destination, position } = this;
+        if (invalidXY(destination) || invalidXY(position))
+          return;
+        return getAStarPath(enemyPositions.get(), position, destination);
+      };
+      this.destination = xy(NaN, NaN);
+      this.position = xy(NaN, NaN);
+      this.enemyPositions = new Cached(this.generateEnemyPositions);
+      this.path = new Cached(this.generatePlayerPath);
+    }
+    getPlayerPath(destination) {
+      if (!eqXY(this.position, this.g.player.positionRounded)) {
+        this.position = this.g.player.positionRounded;
+        this.path.clear();
+      }
+      if (!eqRoundXY(this.destination, destination)) {
+        this.destination = destination;
+        this.path.clear();
+      }
+      return this.path.get();
     }
   };
 
@@ -264,11 +451,6 @@
       makeAnimation("move3", 12, 100, 3330, 1455, 128, 94, loop)
     ]
   );
-
-  // src/tools/euclideanDistance.ts
-  function euclideanDistance(a, b) {
-    return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
-  }
 
   // src/components/AnimationController.ts
   var AnimationController = class {
@@ -608,140 +790,6 @@
     }
   };
 
-  // src/tools/isDefined.ts
-  function isDefined(object) {
-    return typeof object !== "undefined";
-  }
-
-  // src/pathfinding/PriorityQueue.ts
-  var PriorityQueue = class {
-    constructor() {
-      this.list = [];
-      this.dirty = false;
-    }
-    put(location, priority) {
-      this.list.push({ location, priority });
-      this.dirty = true;
-    }
-    sort() {
-      this.list.sort((a, b) => a.priority - b.priority);
-      this.dirty = false;
-    }
-    get() {
-      if (this.dirty)
-        this.sort();
-      const item = this.list.shift();
-      if (!item)
-        throw new Error("queue is empty");
-      return item.location;
-    }
-    empty() {
-      return this.list.length === 0;
-    }
-  };
-
-  // src/pathfinding/GridLocation.ts
-  var GridLocation = class {
-    constructor(x, y) {
-      this.x = x;
-      this.y = y;
-    }
-  };
-
-  // src/pathfinding/WeightedGraph.ts
-  var ROOT2 = Math.sqrt(2);
-  var WeightedGraph = class {
-    constructor(enemies) {
-      this.locations = /* @__PURE__ */ new Map();
-      this.blocked = new Set(
-        Array.from(
-          enemies,
-          (e) => this.at(e.positionRounded.x, e.positionRounded.y)
-        )
-      );
-    }
-    isNavigable(pos) {
-      return !this.blocked.has(pos);
-    }
-    at(x, y) {
-      const tag = `${x},${y}`;
-      const old = this.locations.get(tag);
-      if (old)
-        return old;
-      const loc = new GridLocation(x, y);
-      this.locations.set(tag, loc);
-      return loc;
-    }
-    *neighbours(loc) {
-      for (let y = -1; y <= 1; y++)
-        for (let x = -1; x <= 1; x++) {
-          if (x || y) {
-            const pos = this.at(loc.x + x, loc.y + y);
-            if (this.isNavigable(pos))
-              yield pos;
-          }
-        }
-    }
-    cost(a, b) {
-      const ex = a.x !== b.x;
-      const ey = a.y !== b.y;
-      if (ex && ey)
-        return ROOT2;
-      return 1;
-    }
-  };
-
-  // src/pathfinding/astar.ts
-  var CrashMap = class extends Map {
-    getOrDie(key) {
-      const value = super.get(key);
-      if (typeof value === "undefined")
-        throw new Error(`No such key: ${key}`);
-      return value;
-    }
-  };
-  function heuristic(a, b) {
-    return euclideanDistance(a, b);
-  }
-  function aStarSearch(graph, start, goal, max) {
-    const frontier = new PriorityQueue();
-    frontier.put(start, 0);
-    const cameFrom = /* @__PURE__ */ new Map();
-    const costSoFar = new CrashMap([[start, 0]]);
-    while (!frontier.empty()) {
-      const current = frontier.get();
-      if (current == goal)
-        break;
-      for (const next of graph.neighbours(current)) {
-        const newCost = costSoFar.getOrDie(current) + graph.cost(current, next);
-        if (newCost > max)
-          continue;
-        const nextCost = costSoFar.get(next);
-        if (!isDefined(nextCost) || newCost < nextCost) {
-          costSoFar.set(next, newCost);
-          const priority = newCost + heuristic(next, goal);
-          frontier.put(next, priority);
-          cameFrom.set(next, current);
-        }
-      }
-    }
-    return { cameFrom, costSoFar };
-  }
-  function getAStarPath(enemies, from, to) {
-    const graph = new WeightedGraph(enemies);
-    const start = graph.at(from.x, from.y);
-    const goal = graph.at(to.x, to.y);
-    const max = euclideanDistance(from, to) + 10;
-    const { cameFrom, costSoFar } = aStarSearch(graph, start, goal, max);
-    const path = [];
-    let current = goal;
-    while (current) {
-      path.push(current);
-      current = cameFrom.get(current);
-    }
-    return { path, costSoFar };
-  }
-
   // src/tools/setFont.ts
   function setFont(ctx, font, colour, alignX, alignY) {
     ctx.font = font;
@@ -754,43 +802,42 @@
   var DebugKeyHandler = class {
     constructor(g) {
       this.g = g;
-      window.addEventListener("keypress", (e) => {
-        if (e.key === "c")
+      this.onKeyPress = ({ key }) => {
+        const { g } = this;
+        if (key === "c")
           g.renderFlags.cameraDebug = !g.renderFlags.cameraDebug;
-        if (e.key === "f")
+        if (key === "f")
           g.renderFlags.showFPS = !g.renderFlags.showFPS;
-        if (e.key === "o")
+        if (key === "o")
           g.renderFlags.imageOutline = !g.renderFlags.imageOutline;
-        if (e.key === "p")
+        if (key === "p")
           g.renderFlags.pathDebug = !g.renderFlags.pathDebug;
-      });
-      g.addEventListener("Render", ({ detail: { ctx, flags } }) => {
+      };
+      this.onRender = ({ detail: { ctx, flags } }) => {
+        const { g } = this;
         ctx.globalAlpha = 1;
         setFont(ctx, "16px sans-serif", "white", "left", "bottom");
         ctx.fillText("[C]amera, [F]PS, [O]utline, [P]ath", 8, g.size.height - 8);
         if (flags.pathDebug) {
-          const { positionRounded: position } = g.player;
-          if (!invalidXY(this.g.mouse.position)) {
-            const { path, costSoFar } = getAStarPath(
-              g.enemies,
-              position,
-              g.mouse.position
-            );
-            ctx.globalAlpha = 0.1;
-            ctx.fillStyle = "white";
-            for (const t of path) {
-              const x = makeTilePath(g.camera, t);
-              ctx.fill(x);
-            }
-            ctx.globalAlpha = 0.3;
-            setFont(ctx, "8px sans-serif", "white", "center", "middle");
-            for (const [pos, amount] of costSoFar) {
-              const screen = g.camera.worldToScreen(pos);
-              ctx.fillText(amount.toFixed(1), screen.x, screen.y);
-            }
+          const path = g.path.getPlayerPath(g.mouse.position);
+          if (!path)
+            return;
+          ctx.globalAlpha = 0.1;
+          ctx.fillStyle = "white";
+          for (const t of path.tiles) {
+            const x = makeTilePath(g.camera, t);
+            ctx.fill(x);
+          }
+          ctx.globalAlpha = 0.3;
+          setFont(ctx, "8px sans-serif", "white", "center", "middle");
+          for (const [pos, amount] of path.costSoFar) {
+            const screen = g.camera.worldToScreen(pos);
+            ctx.fillText(amount.toFixed(1), screen.x, screen.y);
           }
         }
-      });
+      };
+      window.addEventListener("keypress", this.onKeyPress, { passive: true });
+      g.addEventListener("Render", this.onRender, { passive: true });
     }
   };
 
@@ -1027,6 +1074,7 @@
       };
       this.res = new ResourceManager(this);
       this.size = new CanvasResizer(canvas);
+      this.path = new PathManager(this);
       this.fpsCounter = new FPSCounter(this);
       this.fuse = new FuseManager(this);
       this.player = new Player(this, xy(0, 0));

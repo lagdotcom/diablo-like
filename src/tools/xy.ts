@@ -27,6 +27,10 @@ export function roundXY<T extends number>({ x, y }: XY<T>) {
   return { x: Math.round(x), y: Math.round(y) } as XY<T>;
 }
 
+export function eqRoundXY<T extends number>(a: XY<T>, b: XY<T>) {
+  return eqXY(roundXY(a), roundXY(b));
+}
+
 export function invalidXY<T extends number>({ x, y }: XY<T>) {
   return isNaN(x) || isNaN(y);
 }

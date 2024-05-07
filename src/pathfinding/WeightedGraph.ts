@@ -1,5 +1,5 @@
-import EntityBase from "../entities/EntityBase";
 import { Tiles } from "../flavours";
+import XY from "../types/XY";
 import GridLocation from "./GridLocation";
 
 const ROOT2 = Math.sqrt(2);
@@ -8,13 +8,9 @@ export default class WeightedGraph {
   private locations: Map<string, GridLocation>;
   private blocked: Set<GridLocation>;
 
-  constructor(enemies: Set<EntityBase>) {
+  constructor(blocked: Set<XY<Tiles>>) {
     this.locations = new Map();
-    this.blocked = new Set(
-      Array.from(enemies, (e) =>
-        this.at(e.positionRounded.x, e.positionRounded.y),
-      ),
-    );
+    this.blocked = new Set(Array.from(blocked, (e) => this.at(e.x, e.y)));
   }
 
   isNavigable(pos: GridLocation) {
